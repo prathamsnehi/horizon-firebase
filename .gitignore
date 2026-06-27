@@ -27,14 +27,3 @@ yarn-error.log*
 # Environment files (local configs)
 /.env.*
 
-###############################
-# Python & /functions specific:
-###############################
-
-# Python bytecode
-*/__pycache__/
-
-# Python virtual environment
-*/venv/
-*.local
-
