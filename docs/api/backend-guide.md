@@ -222,10 +222,13 @@ The `profileHash` is a hash of `(onboardingSummary, interests, growthAreas, city
             "estimatedTime": "string",
             "categories": ["string"],
             "location": {
+                "name": "string",
                 "address": "string",
+                "description": "string",
                 "latitude": 37.7694,
                 "longitude": -122.4862,
-                "photoURL": "string"
+                "photoURL": "string",
+                "googleMapsURL": "string"
             } | null
         }
     ]
@@ -242,10 +245,13 @@ The `profileHash` is a hash of `(onboardingSummary, interests, growthAreas, city
 | `estimatedTime`      | `string`         | Human-readable time estimate (e.g., "1 Hour", "2 Days", "30 Minutes")                     |
 | `categories`         | `[string]`       | Classification labels (e.g., "adventure", "creativity", "connection", "mindfulness")      |
 | `location`           | `object or null` | Present only for location-based quests. Not all quests need a location.                   |
+| `location.name`      | `string`         | The name of the place (e.g., "Dolores Park")                                              |
 | `location.address`   | `string`         | Human-readable address (e.g., "Dolores Park, San Francisco")                              |
+| `location.description`| `string`        | Editorial summary of the place from Google Maps                                           |
 | `location.latitude`  | `number`         | Latitude for MapKit display                                                               |
 | `location.longitude` | `number`         | Longitude for MapKit display                                                              |
 | `location.photoURL`  | `string`         | Constructed Google Maps media URL (see [Photo URL Construction](#photo-url-construction)) |
+| `location.googleMapsURL`| `string`      | URL to open the place in the Google Maps app or browser                                   |
 
 #### Orchestration flow (this is the core logic):
 
@@ -408,7 +414,7 @@ POST https://places.googleapis.com/v1/places:searchText
 ```javascript
 Content-Type: application/json
 X-Goog-Api-Key: {MAPS_API_KEY}
-X-Goog-FieldMask: places.displayName,places.formattedAddress,places.location,places.editorialSummary,places.photos
+X-Goog-FieldMask: places.displayName,places.formattedAddress,places.location,places.editorialSummary,places.photos,places.googleMapsUri
 ```
 
 The **field mask is critical** — it controls which fields are returned and what you're billed for. Only request what you need.
@@ -438,6 +444,7 @@ The **field mask is critical** — it controls which fields are returned and wha
         "longitude": -122.4269
       },
       "editorialSummary": { "text": "Popular park with city views..." },
+      "googleMapsUri": "https://maps.google.com/?cid=123456789",
       "photos": [
         {
           "name": "places/ChIJN1t_tDeuEmsRUsoyG83frY4/photos/AUacShh3Z_6SpKRaHer2sFGsNr_WjJhfOpkU...",

@@ -30,11 +30,14 @@ export interface SidequestRequest {
     deviceId: string;
 }
 
-interface LocationInformation {
+export interface LocationInformation {
+    name: string;
     address: string;
+    description: string;
     latitude: number;
     longitude: number;
     photoURL: string;
+    googleMapsURL: string;
 }
 
 export interface SidequestItem {

@@ -18,7 +18,7 @@ Define the data contracts first so TypeScript can guide your implementation.
 
 1. **Define API Contracts (types.ts):** Translate the JSON shapes from `api-contracts.md` into TypeScript `interfaces`. Create types for the detailed `UserProfile`, the sidequest object, and the sidequest generation request/response. ✅
 2. **Define Firestore Schema:** Create a type for the `pregenerated_batches` document so you get type safety when reading/writing to the cache. ✅
-3. **Setup Config (config.ts):** Export constants for your Secret names and any tuning parameters (like the 7-day expiration time, or the Maps API endpoint URL).
+3. **Setup Config (config.ts):** Export constants for your Secret names and any tuning parameters (like the 7-day expiration time, or the Maps API endpoint URL).✅
 
 ### Phase 3: External API Helpers
 
