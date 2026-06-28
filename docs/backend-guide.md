@@ -20,18 +20,17 @@ This is the complete reference for building the Horizon backend. The backend is 
 
 ## Architecture Overview
 
-The backend is **four Firebase Cloud Functions** (HTTPS callable). The app never talks to Gemini or Google Maps directly — the Cloud Functions are the single point of contact.
+The backend is **two Firebase Cloud Functions** (HTTPS callable). The app never talks to Gemini or Google Maps directly — the Cloud Functions are the single point of contact.
 
-```
+```javascript
 iOS App ←→ Firebase Cloud Functions ←→ Gemini API
                                    ←→ Google Maps Places API (New)
+                                   ←→ Cloud Firestore (Pre-gen Cache)
 ```
 
 ### What the backend is responsible for:
 
-- **Onboarding conversation** — multi-turn AI chat that learns about the user, extracts a structured profile when done
-- **Sidequest generation** — AI-generated real-world challenges, optionally tied to specific nearby locations with photos
-- **Sidequest rerolling** — same as generation but for a single quest with custom tuning dials
+- **Sidequest generation & Pre-generation** — AI-generated real-world challenges in batches of 10. The backend pre-generates the next batch in the background to ensure instant delivery.
 - **Get Started guide generation** — on-demand step-by-step instructions for a specific quest
 
 ### What the backend is NOT responsible for:
@@ -40,6 +39,7 @@ iOS App ←→ Firebase Cloud Functions ←→ Gemini API
 - Photo storage (user photos are stored locally on device, hero images are cached from Google Maps URLs)
 - Push notifications (app uses local notifications only)
 - Any UI concerns
+- Sidequest selection/swiping (entirely app-side)
 
 ---
 
@@ -47,12 +47,13 @@ iOS App ←→ Firebase Cloud Functions ←→ Gemini API
 
 ### Required Firebase Services
 
-| Service                                   | Purpose                                                |
-| ----------------------------------------- | ------------------------------------------------------ |
-| **Cloud Functions** (2nd gen recommended) | Host the 4 HTTPS callable endpoints                    |
-| **App Check**                             | Verify requests come from the genuine compiled iOS app |
+| Service                                   | Purpose                                                                           |
+| ----------------------------------------- | --------------------------------------------------------------------------------- |
+| **Cloud Functions** (2nd gen recommended) | Host the 3 HTTPS callable endpoints and background tasks                          |
+| **Cloud Firestore**                       | Minimal usage: one collection to store pre-generated sidequest batches per device |
+| **App Check**                             | Verify requests come from the genuine compiled iOS app                            |
 
-That's it. No Firestore, no Auth, no Storage, no Cloud Messaging.
+That's it. No Auth, no Storage, no Cloud Messaging.
 
 ### Required Google Cloud Services
 
@@ -90,15 +91,15 @@ App Check ensures that only the genuine, compiled iOS app can call the Cloud Fun
 
 - Enable App Check in the Firebase console
 - Use **DeviceCheck** as the attestation provider for iOS
-- Enforce App Check on all four Cloud Functions
+- Enforce App Check on all three Cloud Functions
 - The Firebase Functions SDK handles token verification automatically when App Check is enforced
 
 ### Google Cloud Secret Manager
 
 The **Gemini API key** must never be exposed to the client. Store it in Secret Manager and access it from Cloud Functions at runtime.
 
-```
-Secret: GEMINI_API_KEY
+```javascript
+Secret: GEMINI_API_KEY;
 ```
 
 The Cloud Function reads this secret at invocation time. Firebase 2nd gen functions can reference secrets directly in their config.
@@ -119,7 +120,7 @@ You can store this key in Secret Manager too, or in Cloud Functions environment 
 
 ### Gemini API
 
-Used for all AI generation: onboarding conversation, sidequest generation, rerolling, and Get Started guides.
+Used for all AI generation: onboarding conversation, sidequest generation, and Get Started guides.
 
 - **Model choice is a backend decision** — the app doesn't know or care which model is used. Pick the best Gemini model for the task (cost vs quality tradeoff). You can change models anytime without touching the app.
 - Gemini is called with structured output / function calling to get well-typed responses (not free-text that needs parsing)
@@ -138,119 +139,76 @@ Used to find real places near the user's city for location-based sidequests.
 
 All endpoints are **HTTPS callable** Cloud Functions invoked via Firebase's callable SDK (not raw HTTP). The SDK handles auth tokens, serialization, and App Check automatically.
 
----
+### 1. `generateSidequests`
 
-### 1. `onboardingChat`
-
-A conversational endpoint for the onboarding flow. Uses **progressive summarization** to keep payloads small — instead of sending the full message history each turn, the client sends a compact summary (returned by the previous call) plus only the new message.
-
-#### How progressive summarization works:
-
-1. User sends their first message → `conversationSummary` is `null`
-2. Cloud Function sends the message to Gemini along with system instructions about what to learn about the user
-3. Gemini responds with a reply and the Cloud Function generates an `updatedSummary` — a compact text blob capturing everything learned so far
-4. The app stores this summary in memory and sends it back with the next message
-5. This repeats until Gemini determines it has enough information to build a profile
-
-#### What the AI should learn during onboarding:
-
-The conversation should naturally explore:
-
-- How the user currently explores and experiences new things
-- Where they want to grow, or what they wish they had the courage to try
-- What a great week looks like for them
-- What's holding them back from doing more
-- What city they're based in
-
-The tone should be warm, curious, and conversational — not a form or interrogation.
-
-#### Request:
-
-```json
-{
-  "conversationSummary": "string or null",
-  "message": "string"
-}
-```
-
-- `conversationSummary` — `null` for the first message, then the `updatedSummary` from the previous response
-- `message` — the user's latest message
-
-#### Response (conversation ongoing):
-
-```json
-{
-  "reply": "string",
-  "updatedSummary": "string",
-  "isComplete": false,
-  "extractedProfile": null
-}
-```
-
-#### Response (conversation complete):
-
-When the AI decides it has enough information, `isComplete` becomes `true` and `extractedProfile` is populated:
-
-```json
-{
-  "reply": "Great, I've got a good picture of who you are! Let's find some adventures for you.",
-  "updatedSummary": "string",
-  "isComplete": true,
-  "extractedProfile": {
-    "onboardingSummary": "string",
-    "interests": ["string"],
-    "growthAreas": ["string"],
-    "city": "string"
-  }
-}
-```
-
-#### Extracted profile fields:
-
-| Field               | Type       | Description                                                                             |
-| ------------------- | ---------- | --------------------------------------------------------------------------------------- |
-| `onboardingSummary` | `string`   | AI-generated summary of who this user is — their personality, motivations, lifestyle    |
-| `interests`         | `[string]` | Things they're curious about or enjoy                                                   |
-| `growthAreas`       | `[string]` | Where they want to grow + things they wish they had the courage to try (merged concept) |
-| `city`              | `string`   | Their base city (e.g., "San Francisco") — used for location-based quest generation      |
-
-#### Implementation notes:
-
-- The system prompt for Gemini should instruct it to be warm and conversational, ask follow-up questions, and avoid rapid-fire interrogation
-- Gemini should aim for ~4-6 conversational turns before completing (enough to feel personal, not so many that it drags)
-- The `updatedSummary` should be generated by Gemini as part of its response (instruct it to maintain a running summary alongside its reply)
-- When Gemini decides it has enough, instruct it to return a structured `extractedProfile` using function calling / structured output
-- If the user's messages are very short or uncooperative, the AI should still try to extract what it can and complete gracefully
-
----
-
-### 2. `generateSidequests`
-
-Generate sidequests based on the user's profile. No tuning dials — the AI uses the profile to determine appropriate variety, difficulty, and mix. This is the standard generation path.
+Generate a batch of sidequests based on the user's profile. The AI uses the profile to determine appropriate variety, difficulty, and mix. This is the only generation endpoint — there is no separate reroll or customization endpoint.
 
 #### When it's called:
 
-- **Initial batch after onboarding** — `count=5`, fill all 5 slots
-- **Filling an empty slot** — `count=1`, when the user taps "Generate new sidequest" after completing or rerolling one
+- **Initial batch after onboarding** — `count=10`, fill the swipe deck
+- **User-initiated regeneration** — `count=10`, user explicitly chose to get a fresh batch (old remaining quests cleared app-side)
+- **Batch exhausted** — `count=10`, auto-triggered when the user has completed/used all quests from the current batch
 
 #### Request:
 
 ```json
 {
   "profile": {
-    "onboardingSummary": "string",
     "interests": ["string"],
     "growthAreas": ["string"],
+    "vibe": ["string"],
+    "experimentationLevel": 1,
+    "budget": ["string"],
+    "transportation": ["string"],
+    "locationPreferences": ["string"],
+    "additionalContext": "string or null",
     "city": "string"
   },
-  "count": 1,
-  "excludeTitles": ["string"]
+  "count": 10,
+  "excludeTitles": ["string"],
+  "deviceId": "string"
 }
 ```
 
 - `profile` — the user's onboarding profile (everything Gemini needs to personalize)
-- `count` — how many sidequests to generate (1-5)
-- `excludeTitles` — titles of the user's currently active sidequests, so the AI avoids duplicates
+- `count` — how many sidequests to generate (always 10 for batch generation)
+- `excludeTitles` — titles of recently completed sidequests, so the AI avoids duplicates
+- `deviceId` — unique identifier for the user's device, used for rate limiting and fetching pre-generated batches
+
+#### Pre-Generation Flow
+
+To ensure the user doesn't have to wait for Gemini and Google Maps API calls, the backend pre-generates the next batch of 10 quests in the background immediately after delivering a batch.
+
+**How it works:**
+
+1. The app calls `generateSidequests`.
+2. The Cloud Function checks Firestore for a pre-generated batch (`pregenerated_batches/{deviceId}`).
+3. If a valid batch exists and the `profileHash` matches the current profile, it is returned instantly to the app.
+4. If there's a cache miss (or the profile changed), the Cloud Function generates a fresh batch synchronously (the app waits and displays a "curating" loading state).
+5. Right before returning the batch (whether cached or freshly generated), the Cloud Function kicks off a background task to pre-generate the _next_ batch of 10 using the same profile and `excludeTitles`.
+6. This next batch is stored in the Firestore document, overwriting any previous one.
+
+**Firestore Schema:**
+Collection: `pregenerated_batches`
+Document ID: `{deviceId}`
+
+```json
+{
+    "sidequests": [...],
+    "profileHash": "abc123...",
+    "createdAt": Timestamp,
+    "excludeTitles": [...]
+}
+```
+
+**Profile Hash for Staleness:**
+The `profileHash` is a hash of `(onboardingSummary, interests, growthAreas, city)`. If the user retakes onboarding or changes their city, the hash changes, invalidating the pre-generated batch. The cache also expires after 7 days (checked via `createdAt`).
+
+**Edge Cases:**
+
+- If the user completes quests rapidly and requests a new batch before the background pre-generation finishes, they will simply wait for a fresh generation.
+- If pre-generation fails silently (e.g., Gemini timeout), the cache stays empty. The next request just generates fresh.
+- `excludeTitles` overlap is minimal since the pre-generation runs right after completion, and we can also re-filter upon delivery if needed.
 
 #### Response:
 
@@ -296,79 +254,16 @@ See [Gemini Integration](#gemini-integration) and [Google Maps Places API Integr
 #### Implementation notes:
 
 - The AI should generate a **mix** of location-based and non-location quests. Not every quest needs a place — some are activities the user can do anywhere
-- Variety in difficulty is important — don't generate 5 hard quests or 5 easy ones
+- **Variety is critical** since the user sees all 10 at once in a swipe deck. Vary difficulty, category, time commitment, and type (solo vs social, free vs paid, indoor vs outdoor)
 - Categories should feel natural and descriptive, not forced taxonomy. Examples: "adventure", "creativity", "connection", "wellness", "learning", "mindfulness", "spontaneity"
 - `estimatedTime` should be human-readable strings, not machine-parseable durations. Examples: "30 Minutes", "1 Hour", "Half a Day", "A Weekend"
+- Since there are 10 quests, aim for a balanced spread: \~3-4 easy, \~3-4 moderate, \~2-3 hard, \~0-1 extreme
 
 ---
 
-### 3. `rerollSidequest`
+### 2. `generateGetStartedGuide`
 
-Generate a **single** sidequest with custom tuning dial overrides. Used when the user wants to replace a specific quest and tune what they get back.
-
-#### Request:
-
-```json
-{
-  "profile": {
-    "onboardingSummary": "string",
-    "interests": ["string"],
-    "growthAreas": ["string"],
-    "city": "string"
-  },
-  "dials": {
-    "boldness": 0.0,
-    "soloOrGroup": 0.0,
-    "budget": "zero",
-    "wildcard": 0.0
-  },
-  "excludeTitles": ["string"]
-}
-```
-
-#### Tuning dials:
-
-| Dial          | Type     | Range                                    | Description                                                                                                                 |
-| ------------- | -------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `boldness`    | `float`  | 0.0 - 1.0                                | How far outside their comfort zone. 0 = cozy, 0.5 = challenging, 1.0 = fearless                                             |
-| `soloOrGroup` | `float`  | 0.0 - 1.0                                | 0 = solo activity, 1.0 = group activity                                                                                     |
-| `budget`      | `string` | `"zero"`, `"coupleDollars"`, `"splurge"` | How much the quest can cost                                                                                                 |
-| `wildcard`    | `float`  | 0.0 - 1.0                                | How random/unexpected. 0 = relevant to interests, 1.0 = completely out of left field. Conceptually similar to "temperature" |
-
-#### Response:
-
-```json
-{
-    "sidequest": {
-        "title": "string",
-        "description": "string",
-        "difficulty": "easy | moderate | hard | extreme",
-        "estimatedTime": "string",
-        "categories": ["string"],
-        "location": {
-            "address": "string",
-            "latitude": 37.7694,
-            "longitude": -122.4862,
-            "photoURL": "string"
-        } | null
-    }
-}
-```
-
-Same sidequest shape as `generateSidequests`, but always exactly one (not wrapped in an array).
-
-#### Implementation notes:
-
-- Same orchestration flow as `generateSidequests` (Gemini → optional Maps lookup → photo URL construction)
-- The dials should be translated into Gemini prompt instructions. For example, `boldness: 0.9` might add "This should be something that really pushes them outside their comfort zone" to the prompt
-- `wildcard: 1.0` should make the AI ignore the user's interests and generate something completely unexpected
-- `budget: "zero"` should explicitly constrain the quest to be free
-
----
-
-### 4. `generateGetStartedGuide`
-
-Generate a step-by-step guide for how to approach and complete a specific sidequest. Called on-demand when the user taps "Get Started" on a quest detail screen.
+Generate a step-by-step guide for how to approach and complete a specific sidequest. Called on-demand when the user taps "Get Started" on the Home tab.
 
 #### Request:
 
@@ -379,12 +274,16 @@ Generate a step-by-step guide for how to approach and complete a specific sidequ
     "description": "string",
     "categories": ["string"]
   },
-  "profileSummary": "string"
+  "profile": {
+    "interests": ["string"],
+    "growthAreas": ["string"],
+    "additionalContext": "string or null"
+  }
 }
 ```
 
 - `sidequest` — the quest to generate a guide for (only the fields Gemini needs for context)
-- `profileSummary` — the user's `onboardingSummary` (so the guide can be personalized)
+- `profile` — a subset of the user's profile (so the guide can be personalized)
 
 #### Response:
 
@@ -405,15 +304,14 @@ Generate a step-by-step guide for how to approach and complete a specific sidequ
 
 ## Gemini Integration
 
-### Sidequest generation flow (used by `generateSidequests` and `rerollSidequest`)
+### Sidequest generation flow (used by `generateSidequests`)
 
 This is the core orchestration pattern. The Cloud Function coordinates between Gemini and Google Maps:
 
-```
+```javascript
 Cloud Function                         External APIs
     │                                       │
     ├── 1. Build prompt from user profile   │
-    │      + dial overrides (if reroll)     │
     │      + excludeTitles                  │
     │                                       │
     ├── 2. Call Gemini ────────────────────→ Gemini API
@@ -450,17 +348,21 @@ Cloud Function                         External APIs
 - The app's purpose: generating real-world sidequests for personal growth
 - The quest format: title, description, difficulty, estimatedTime, categories
 - That some quests should be location-based (tied to a specific place in the user's city) and some should be location-agnostic
+- **Variety requirement:** since the user sees all 10 in a swipe deck, the batch needs diverse difficulty levels, categories, time commitments, and types
 - Quality guidelines: quests should be specific, actionable, interesting — not generic bucket-list items
 - Difficulty rating criteria (easy = within comfort zone, moderate = meaningful stretch, hard = significant challenge, extreme = way outside comfort zone)
 
 #### User context in the prompt:
 
-- `onboardingSummary` — who this person is
 - `interests` — what they're curious about
-- `growthAreas` — where they want to grow / what they wish they had courage to try
+- `growthAreas` — where they want to grow / push themselves
+- `vibe` — social vs solo preferences
+- `experimentationLevel` — this should explicitly control how much Gemini deviates from the user's explicit preferences. A high value means Gemini should intentionally throw "wildcard" quests that fall outside the user's `interests` and `vibe`. A low value means Gemini should stick strictly to what the user explicitly requested.
+- `budget` & `transportation` — strict parameters for the quest design (e.g. if transportation is "walking", quests shouldn't require driving across town).
+- `locationPreferences` — what type of places they like
+- `additionalContext` — any free-text nuance (e.g., "I have a dog")
 - `city` — where they're based (for location-based quests)
 - `excludeTitles` — quests to avoid duplicating
-- Dial overrides (reroll only): boldness, soloOrGroup, budget, wildcard
 
 #### Structured output / function calling:
 
@@ -468,7 +370,7 @@ Use Gemini's structured output or function calling capabilities to get well-type
 
 For each sidequest:
 
-```
+```javascript
 {
     title: string,
     description: string,
@@ -500,13 +402,13 @@ When Gemini says a quest needs a location, call the Places API Nearby Search wit
 
 #### Endpoint:
 
-```
+```javascript
 POST https://places.googleapis.com/v1/places:searchNearby
 ```
 
 #### Headers:
 
-```
+```javascript
 Content-Type: application/json
 X-Goog-Api-Key: {MAPS_API_KEY}
 X-Goog-FieldMask: places.displayName,places.formattedAddress,places.location,places.editorialSummary,places.photos
@@ -567,7 +469,7 @@ The **field mask is critical** — it controls which fields are returned and wha
 
 The `name` field in the photos array is a **resource identifier**, NOT a URL and NOT raw image data. It looks like:
 
-```
+```javascript
 places/ChIJN1t.../photos/AUacShh3Z_6SpKRaHer2sFGsNr_WjJhfOpkU...
 ```
 
@@ -581,7 +483,7 @@ The Google Maps Places API returns photo **resource identifiers**, not URLs. The
 
 ### Media URL format:
 
-```
+```javascript
 https://places.googleapis.com/v1/{PHOTO_RESOURCE_NAME}/media?key={MAPS_API_KEY}&maxHeightPx=600
 ```
 
@@ -589,13 +491,16 @@ https://places.googleapis.com/v1/{PHOTO_RESOURCE_NAME}/media?key={MAPS_API_KEY}&
 
 Given a photo resource name of:
 
-```
-places/ChIJN1t_tDeuEmsRUsoyG83frY4/photos/AUacShh3Z_6SpKRaHer2sFGsNr_WjJhfOpkU
+```javascript
+places /
+  ChIJN1t_tDeuEmsRUsoyG83frY4 /
+  photos /
+  AUacShh3Z_6SpKRaHer2sFGsNr_WjJhfOpkU;
 ```
 
 The constructed URL would be:
 
-```
+```javascript
 https://places.googleapis.com/v1/places/ChIJN1t_tDeuEmsRUsoyG83frY4/photos/AUacShh3Z_6SpKRaHer2sFGsNr_WjJhfOpkU/media?key=AIza...&maxHeightPx=600
 ```
 
@@ -629,12 +534,10 @@ Rate limits are enforced server-side per device identifier. The app sends a devi
 
 ### Suggested limits:
 
-| Endpoint                  | Limit                   |
-| ------------------------- | ----------------------- |
-| `generateSidequests`      | 10 calls per hour       |
-| `rerollSidequest`         | 20 calls per hour       |
-| `onboardingChat`          | 30 messages per session |
-| `generateGetStartedGuide` | 10 calls per hour       |
+| Endpoint                  | Limit             |
+| ------------------------- | ----------------- |
+| `generateSidequests`      | 5 calls per hour  |
+| `generateGetStartedGuide` | 10 calls per hour |
 
 ### Implementation approach:
 
@@ -644,10 +547,9 @@ Rate limits are enforced server-side per device identifier. The app sends a devi
 
 ### Why these limits:
 
-- `generateSidequests` at 10/hr is generous — normal usage is ~1-2 calls per session
-- `rerollSidequest` at 20/hr accounts for users experimenting with dials
-- `onboardingChat` at 30/session prevents infinite conversation loops (onboarding should complete in ~4-6 turns)
-- These limits primarily protect against API cost abuse, not normal user behavior
+- `generateSidequests` at 5/hr is generous — normal usage is 1 call per session (one batch on quest completion). This limit exists to prevent abuse, not to constrain normal users
+- `generateGetStartedGuide` at 10/hr is generous — one call per quest
+- The swipe-to-choose model naturally limits backend calls: the user sees 10 options per batch, and batches persist until the user explicitly regenerates or exhausts all remaining quests
 
 ---
 
@@ -701,20 +603,6 @@ firebase deploy --only functions:generateSidequests
 
 Test manually before wiring up the app. You can use the Firebase console's Cloud Functions testing UI, or curl:
 
-#### Test `onboardingChat`:
-
-```bash
-# First message (no summary)
-curl -X POST https://{REGION}-{PROJECT_ID}.cloudfunctions.net/onboardingChat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "data": {
-        "conversationSummary": null,
-        "message": "Hey! I just moved to San Francisco and I want to get out more."
-    }
-  }'
-```
-
 #### Test `generateSidequests`:
 
 ```bash
@@ -723,37 +611,18 @@ curl -X POST https://{REGION}-{PROJECT_ID}.cloudfunctions.net/generateSidequests
   -d '{
     "data": {
         "profile": {
-            "onboardingSummary": "Adventurous 25-year-old software developer who wants to explore more of SF. Loves hiking and art.",
-            "interests": ["hiking", "street art", "coffee shops", "live music"],
-            "growthAreas": ["public speaking", "meeting new people", "trying foods outside comfort zone"],
+            "interests": ["hiking", "street art", "coffee shops"],
+            "growthAreas": ["meeting new people", "trying foods outside comfort zone"],
+            "vibe": ["Social", "High Energy"],
+            "experimentationLevel": 3,
+            "budget": ["Moderate"],
+            "transportation": ["Public Transit", "Walking"],
+            "locationPreferences": ["Downtown", "Nature"],
+            "additionalContext": null,
             "city": "San Francisco"
         },
-        "count": 3,
+        "count": 10,
         "excludeTitles": []
-    }
-  }'
-```
-
-#### Test `rerollSidequest`:
-
-```bash
-curl -X POST https://{REGION}-{PROJECT_ID}.cloudfunctions.net/rerollSidequest \
-  -H "Content-Type: application/json" \
-  -d '{
-    "data": {
-        "profile": {
-            "onboardingSummary": "Adventurous 25-year-old...",
-            "interests": ["hiking", "street art"],
-            "growthAreas": ["public speaking"],
-            "city": "San Francisco"
-        },
-        "dials": {
-            "boldness": 0.8,
-            "soloOrGroup": 0.3,
-            "budget": "coupleDollars",
-            "wildcard": 0.5
-        },
-        "excludeTitles": ["Visit Dolores Park at sunset"]
     }
   }'
 ```
@@ -770,28 +639,28 @@ curl -X POST https://{REGION}-{PROJECT_ID}.cloudfunctions.net/generateGetStarted
             "description": "Find a local open mic night and either perform or watch. Push yourself to talk to at least one performer after their set.",
             "categories": ["connection", "creativity"]
         },
-        "profileSummary": "Adventurous 25-year-old software developer who wants to explore more of SF."
+        "profile": {
+            "interests": ["hiking", "street art", "coffee shops"],
+            "growthAreas": ["meeting new people", "trying foods outside comfort zone"]
+        }
     }
   }'
 ```
 
 ### Verification checklist:
 
-- [ ] All 4 endpoints return correctly shaped responses
-- [ ] `onboardingChat` maintains conversation context via progressive summarization
-- [ ] `onboardingChat` eventually returns `isComplete: true` with a populated `extractedProfile`
-- [ ] `generateSidequests` returns a mix of location-based and non-location quests
-- [ ] Location-based quests have valid `photoURL` values that resolve to actual images when opened in a browser
-- [ ] `rerollSidequest` respects dial values (high boldness → harder quest, budget zero → free quest, etc.)
-- [ ] `generateGetStartedGuide` returns practical, personalized steps
-- [ ] Rate limiting works and returns `rate_limited` error code when exceeded
-- [ ] App Check is enforced (unauthenticated requests are rejected)
-- [ ] Gemini API key is not exposed anywhere in responses
-- [ ] Maps API key in `photoURL` is restricted to Places API + bundle ID
+- Both endpoints return correctly shaped responses
+- `generateSidequests` returns 10 quests with good variety (difficulty, category, location vs non-location)
+- Location-based quests have valid `photoURL` values that resolve to actual images when opened in a browser
+- `generateGetStartedGuide` returns practical, personalized steps
+- Rate limiting works and returns `rate_limited` error code when exceeded
+- App Check is enforced (unauthenticated requests are rejected)
+- Gemini API key is not exposed anywhere in responses
+- Maps API key in `photoURL` is restricted to Places API + bundle ID
 
 ---
 
-## Quick Reference: App ↔ Backend Data Mapping
+## Quick Reference: App <-> Backend Data Mapping
 
 For context, here's how the backend response fields map to the iOS app's SwiftData model:
 
@@ -799,24 +668,29 @@ For context, here's how the backend response fields map to the iOS app's SwiftDa
 | ---------------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
 | `title`                | `Sidequest.title`                                           | Direct mapping                                       |
 | `description`          | `Sidequest.questDescription`                                | Renamed on iOS to avoid Swift reserved word conflict |
-| `difficulty`           | `Sidequest.difficulty`                                      | String → `DifficultyRating` enum on iOS              |
+| `difficulty`           | `Sidequest.difficulty`                                      | String -> `DifficultyRating` enum on iOS             |
 | `estimatedTime`        | `Sidequest.estimatedTime`                                   | Direct mapping                                       |
 | `categories`           | `Sidequest.categories`                                      | Direct mapping                                       |
 | `location.address`     | `Sidequest.locationAddress`                                 | `nil` if no location                                 |
 | `location.latitude`    | `Sidequest.locationLatitude`                                | `nil` if no location                                 |
 | `location.longitude`   | `Sidequest.locationLongitude`                               | `nil` if no location                                 |
 | `location.photoURL`    | `Sidequest.heroImageURL`                                    | `nil` if no location or no photo                     |
-| _(not in response)_    | `Sidequest.status`                                          | Always `.inbox` on creation — app-side only          |
+| _(not in response)_    | `Sidequest.status`                                          | Always `.available` on creation — app-side only      |
 | _(not in response)_    | `Sidequest.id`, `.createdAt`                                | Generated on device                                  |
 | _(not in response)_    | `Sidequest.completedAt`, `.journalEntry`, `.photoFilenames` | Populated by user on completion                      |
 | _(not in response)_    | `Sidequest.getStartedSteps`                                 | Populated by separate `generateGetStartedGuide` call |
 
-### UserProfile mapping (from `onboardingChat` extractedProfile):
+### UserProfile mapping (collected via Guided UI):
 
-| Backend response field               | iOS model field                      |
-| ------------------------------------ | ------------------------------------ | --------------------------------------------- |
-| `extractedProfile.onboardingSummary` | `UserProfile.onboardingSummary`      |
-| `extractedProfile.interests`         | `UserProfile.interests`              |
-| `extractedProfile.growthAreas`       | `UserProfile.growthAreas`            |
-| `extractedProfile.city`              | `UserProfile.city`                   |
-| _(not in response)_                  | `UserProfile.hasCompletedOnboarding` | Set to `true` by app after profile extraction |
+| App Model field                      |                                       |
+| ------------------------------------ | ------------------------------------- |
+| `UserProfile.interests`              |                                       |
+| `UserProfile.growthAreas`            |                                       |
+| `UserProfile.vibe`                   |                                       |
+| `UserProfile.experimentationLevel`   |                                       |
+| `UserProfile.budget`                 |                                       |
+| `UserProfile.transportation`         |                                       |
+| `UserProfile.locationPreferences`    |                                       |
+| `UserProfile.additionalContext`      |                                       |
+| `UserProfile.city`                   |                                       |
+| `UserProfile.hasCompletedOnboarding` | Set to `true` by app after onboarding |
