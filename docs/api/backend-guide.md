@@ -321,8 +321,7 @@ Cloud Function                         External APIs
     │ ←─── Gemini returns structured        │
     │      sidequest data + optionally      │
     │      requests a place search          │
-    │      (place types, keywords,          │
-    │      rank preference)                 │
+    │      (textQuery)                      │
     │                                       │
     ├── 3. For each quest that needs a      │
     │      location, call Maps ───────────→ Google Maps Places API (New)
@@ -379,9 +378,7 @@ For each sidequest:
     categories: [string],
     needsLocation: boolean,
     placeSearchParams: {              // only if needsLocation is true
-        includedTypes: [string],      // Google Maps place types (e.g., "park", "art_gallery")
-        keywords: string,            // text query to refine search
-        rankPreference: "DISTANCE" | "RELEVANCE"
+        textQuery: string             // natural language query (e.g., "State parks in Wisconsin", "Jazz clubs downtown Chicago")
     } | null
 }
 ```
@@ -396,14 +393,14 @@ The `placeSearchParams` are what the Cloud Function uses to call the Google Maps
 
 Use the **Places API (New)** — NOT the legacy Places API. The new API uses field masks for efficient requests and has a different URL structure.
 
-### Nearby Search (New)
+### Text Search (New)
 
-When Gemini says a quest needs a location, call the Places API Nearby Search with the params Gemini provided.
+When Gemini says a quest needs a location, call the Places API Text Search with the textQuery Gemini provided.
 
 #### Endpoint:
 
 ```javascript
-POST https://places.googleapis.com/v1/places:searchNearby
+POST https://places.googleapis.com/v1/places:searchText
 ```
 
 #### Headers:
@@ -420,24 +417,12 @@ The **field mask is critical** — it controls which fields are returned and wha
 
 ```json
 {
-  "includedTypes": ["park"],
-  "maxResultCount": 1,
-  "rankPreference": "RELEVANCE",
-  "locationRestriction": {
-    "circle": {
-      "center": {
-        "latitude": 37.7749,
-        "longitude": -122.4194
-      },
-      "radius": 10000.0
-    }
-  }
+  "textQuery": "Spicy Thai restaurants in downtown San Francisco",
+  "maxResultCount": 1
 }
 ```
 
-- `includedTypes` — from Gemini's `placeSearchParams.includedTypes`
-- `rankPreference` — from Gemini's `placeSearchParams.rankPreference`
-- `locationRestriction` — center on the user's city. You'll need to geocode the city name to lat/lng (can be done once and cached, or use the Geocoding API)
+- `textQuery` — from Gemini's `placeSearchParams.textQuery`. This gives Gemini infinite flexibility to search local or far away.
 - `maxResultCount` — 1 is sufficient since we just need one place per quest
 
 #### Response (relevant fields):

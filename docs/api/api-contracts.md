@@ -134,10 +134,10 @@ Mobile App                    Cloud Function                     External APIs
     │                              ├── prompt + user context ────────→ Gemini API
     │                              │                                  │
     │                              │ ←── structured sidequests +      │
-    │                              │     search params (place types,  │
-    │                              │     keywords, rank preference)   │
+    │                              │     search params                │
+    │                              │     (textQuery)                  │
     │                              │                                  │
-    │                              ├── search params + city ─────────→ Google Maps
+    │                              ├── textQuery ────────────────────→ Google Maps
     │                              │                                  Places API (New)
     │                              │                                  │
     │                              │ ←── address, lat/lng,            │

@@ -9,15 +9,15 @@ Before writing logic, get your environment and external APIs ready.
 1. **Initialize Firebase & Firestore:** Run `firebase init` in your project if you haven't, ensuring you select Functions (TypeScript, 2nd Gen) and Firestore. ✅
 2. **Provision Gemini:** Get a Gemini API key from Google AI Studio or Google Cloud Vertex AI. ✅
 3. **Provision Google Maps:** Enable the **Places API (New)** in Google Cloud Console. Restrict the API key to just the Places API.✅
-4. **Set Up Secret Manager:** Add your `GEMINI_API_KEY` to Google Cloud Secret Manager (Firebase 2nd Gen functions integrate well with this). You can also store your `MAPS_API_KEY` securely here or in a `.env` file for local development.✅
+4. **Set Up Secret Manager:** Add your `GEMINI_API_KEY` to Google Cloud Secret Manager (Firebase 2nd Gen functions integrate well with this). You can also store your `PLACES_API_KEY` securely here or in a `.env` file for local development.✅
 5. **Install Dependencies:** Inside the `functions` folder, run `npm install @google/generative-ai` to get the Gemini SDK.✅
 
 ### Phase 2: Types & Configuration
 
 Define the data contracts first so TypeScript can guide your implementation.
 
-1. **Define API Contracts (types.ts):** Translate the JSON shapes from `api-contracts.md` into TypeScript `interfaces`. Create types for the detailed `UserProfile`, the sidequest object, and the sidequest generation request/response.
-2. **Define Firestore Schema:** Create a type for the `pregenerated_batches` document so you get type safety when reading/writing to the cache.
+1. **Define API Contracts (types.ts):** Translate the JSON shapes from `api-contracts.md` into TypeScript `interfaces`. Create types for the detailed `UserProfile`, the sidequest object, and the sidequest generation request/response. ✅
+2. **Define Firestore Schema:** Create a type for the `pregenerated_batches` document so you get type safety when reading/writing to the cache. ✅
 3. **Setup Config (config.ts):** Export constants for your Secret names and any tuning parameters (like the 7-day expiration time, or the Maps API endpoint URL).
 
 ### Phase 3: External API Helpers
@@ -25,12 +25,12 @@ Define the data contracts first so TypeScript can guide your implementation.
 Build the wrappers for Gemini and Google Maps in isolation. Test these locally using simple node scripts before wiring them into Firebase.
 
 1. **Google Maps Helper (maps.ts):**
-   - Write a function that takes search params (place types, keywords, coordinates) and uses `fetch` to call the `places:searchNearby` endpoint.
+   - Write a function that takes a text query (e.g. "State parks in Wisconsin") and uses `fetch` to call the `places:searchText` endpoint.
    - Implement the URL construction logic that takes the `photos[].name` resource identifier and builds the final `photoURL` for the client.
 2. **Gemini Helper (gemini.ts):**
    - Initialize the `GoogleGenerativeAI` client.
    - Create a helper for `generateGetStartedGuide`.
-   - Create the core `generateSidequests` helper. This is the hardest part: configure Gemini to use **Structured Output** (or function calling) to return an array of 10 quests, optionally including place search parameters if a quest needs a location.
+   - Create the core `generateSidequests` helper. This is the hardest part: configure Gemini to use **Structured Output** (or function calling) to return an array of 10 quests, optionally including a text query string if a quest needs a location.
 
 ### Phase 4: The Simple Cloud Functions
 
