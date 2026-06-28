@@ -1,5 +1,6 @@
 /**
- * Represents the detailed profile of the user collected during the Guided UI Onboarding.
+ * Represents the detailed profile of the user collected 
+ * during the Guided UI Onboarding.
  * This is sent by the client to the Cloud Functions.
  */
 
