@@ -51,15 +51,20 @@ Generate a batch of sidequests based on the user's profile. The AI uses the prof
             "estimatedTime": "1 Hour",
             "categories": ["string"],
             "location": {
+                "name": "string",
                 "address": "string",
+                "description": "string",
                 "latitude": 37.7694,
                 "longitude": -122.4862,
-                "photoURL": "string"
+                "photoURL": "string",
+                "googleMapsURL": "string"
             } | null
         }
     ]
 }
 ```
+
+_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photos or no editorial description), that field will safely default to an empty string "" (or 0 for coordinates)._
 
 ### 2. `generateGetStartedGuide`
 
