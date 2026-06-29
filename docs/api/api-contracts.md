@@ -130,24 +130,25 @@ The app should handle `rate_limited` gracefully with a user-friendly message and
 
 The Cloud Functions use a multi-step orchestration pattern to generate location-aware sidequests:
 
-### Flow
+### Flow (Two-Pass Architecture)
 
 ```javascript
 Mobile App                    Cloud Function                     External APIs
     │                              │                                  │
     ├── { profile, count } ──────→ │                                  │
-    │                              ├── prompt + user context ────────→ Gemini API
+    │                              ├── Pass 1: profile ──────────────→ Gemini API
     │                              │                                  │
-    │                              │ ←── structured sidequests +      │
-    │                              │     search params                │
-    │                              │     (textQuery)                  │
+    │                              │ ←── 10 location concepts         │
     │                              │                                  │
-    │                              ├── textQuery ────────────────────→ Google Maps
-    │                              │                                  Places API (New)
+    │                              ├── Promise.all() fetch 10 ───────→ Google Maps
+    │                              │   locations in parallel          Places API (New)
     │                              │                                  │
-    │                              │ ←── address, lat/lng,            │
-    │                              │     editorial summary,           │
-    │                              │     photo resource identifier    │
+    │                              │ ←── 10 rich location objects     │
+    │                              │     (address, summary, etc)      │
+    │                              │                                  │
+    │                              ├── Pass 2: profile + 10 locations→ Gemini API
+    │                              │                                  │
+    │                              │ ←── 10 tailored sidequests       │
     │                              │                                  │
     │                              ├── construct media URL from       │
     │                              │   resource identifier + API key  │
@@ -159,9 +160,9 @@ Mobile App                    Cloud Function                     External APIs
 
 ### What the Cloud Function does:
 
-1. Sends the user's profile + city to **Gemini** with a function declaration for location searching
-2. Gemini returns structured sidequest data + search parameters for relevant places
-3. Cloud Function calls **Google Maps Places API (New)** with those parameters, using a Field Mask to fetch only: address, coordinates, editorial summary, and photo references
+1. **Pass 1 (Scout):** Sends the user's profile to **Gemini** to generate 10 high-level location concepts/queries.
+2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** in parallel using `Promise.all()` to fetch rich details for those 10 concepts (address, coordinates, summary, reviews, and photo references).
+3. **Pass 2 (Writer):** Sends the profile AND the 10 rich Maps locations back to Gemini to generate 10 highly-tailored sidequests.
 4. The Places API returns a **photo resource identifier** (`name` field) for each photo — not a URL or raw image data. Example: `"places/ChIJN1t.../photos/AUacShh3Z..."`
 5. Cloud Function constructs a **media URL** from the resource identifier: `https://places.googleapis.com/v1/{photo_name}/media?key=API_KEY&maxHeightPx=600`
 6. Returns this constructed URL as `photoURL` in the response — the app fetches and caches the image directly from Google

@@ -317,33 +317,31 @@ This is the core orchestration pattern. The Cloud Function coordinates between G
 ```javascript
 Cloud Function                         External APIs
     │                                       │
-    ├── 1. Build prompt from user profile   │
-    │      + excludeTitles                  │
+    ├── 1. Pass 1 (Scout)                   │
+    │      Send UserProfile ───────────────→ Gemini API
     │                                       │
-    ├── 2. Call Gemini ────────────────────→ Gemini API
-    │      (with function declaration       │
-    │       for place searching)            │
+    │ ←─── Gemini returns 10 location       │
+    │      concepts/search queries          │
     │                                       │
-    │ ←─── Gemini returns structured        │
-    │      sidequest data + optionally      │
-    │      requests a place search          │
-    │      (textQuery)                      │
+    ├── 2. Fetch Locations in PARALLEL      │
+    │      Promise.all(10 queries) ───────→ Google Maps Places API (New)
     │                                       │
-    ├── 3. For each quest that needs a      │
-    │      location, call Maps ───────────→ Google Maps Places API (New)
-    │      with Gemini's search params      │
+    │ ←─── Maps returns 10 rich location    │
+    │      objects (summary, reviews, etc)  │
     │                                       │
-    │ ←─── Maps returns address, lat/lng,   │
-    │      editorial summary, photo         │
-    │      resource identifier              │
+    ├── 3. Pass 2 (Writer)                  │
+    │      Send UserProfile + 10 Locations ─→ Gemini API
     │                                       │
-    ├── 4. Construct photoURL from          │
-    │      resource identifier + API key    │
+    │ ←─── Gemini returns 10 highly-tailored│
+    │      sidequest objects                │
+    │                                       │
+    ├── 4. Construct photoURLs from         │
+    │      resource identifiers + API key   │
     │                                       │
     ├── 5. Merge Maps data into sidequest   │
-    │      response object                  │
+    │      response objects                 │
     │                                       │
-    └── 6. Return final response to app     │
+    └── 6. Return final batch to app        │
 ```
 
 ### Gemini prompting strategy
@@ -373,23 +371,36 @@ Cloud Function                         External APIs
 
 Use Gemini's structured output or function calling capabilities to get well-typed responses. The AI should return:
 
-For each sidequest:
+Use Gemini's structured output. 
 
+**Pass 1 (Scout) Output Schema:**
 ```javascript
 {
-    title: string,
-    description: string,
-    difficulty: "easy" | "moderate" | "hard" | "extreme",
-    estimatedTime: string,
-    categories: [string],
-    needsLocation: boolean,
-    placeSearchParams: {              // only if needsLocation is true
-        textQuery: string             // natural language query (e.g., "State parks in Wisconsin", "Jazz clubs downtown Chicago")
-    } | null
+    locationConcepts: [
+      {
+         textQuery: string // e.g., "independent bookstores in Chicago", "scenic hiking trails"
+      }
+    ]
 }
 ```
 
-The `placeSearchParams` are what the Cloud Function uses to call the Google Maps Places API. Gemini decides _what kind of place_ would be good for this quest, and the Cloud Function finds a specific one.
+**Pass 2 (Writer) Output Schema:**
+```javascript
+{
+    sidequests: [
+      {
+        title: string,
+        description: string,
+        difficulty: "easy" | "moderate" | "hard" | "extreme",
+        estimatedTime: string,
+        categories: [string],
+        locationIndex: number // The index of the Maps location to attach
+      }
+    ]
+}
+```
+
+The `locationIndex` tells the Cloud Function which Maps API result belongs to which quest, so you can stitch them together locally before sending to Firestore.
 
 ---
 
