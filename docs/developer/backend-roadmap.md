@@ -25,8 +25,8 @@ Define the data contracts first so TypeScript can guide your implementation.
 Build the wrappers for Gemini and Google Maps in isolation. Test these locally using simple node scripts before wiring them into Firebase.
 
 1. **Google Maps Helper (maps.ts):**
-   - Write a function that takes a text query (e.g. "State parks in Wisconsin") and uses `fetch` to call the `places:searchText` endpoint.
-   - Implement the URL construction logic that takes the `photos[].name` resource identifier and builds the final `photoURL` for the client.
+   - Write a function that takes a text query (e.g. "State parks in Wisconsin") and uses `fetch` to call the `places:searchText` endpoint. ✅
+   - Implement the URL construction logic that takes the `photos[].name` resource identifier and builds the final `photoURL` for the client. ✅
 2. **Gemini Helper (gemini.ts):**
    - Initialize the `GoogleGenerativeAI` client.
    - Create a helper for `generateGetStartedGuide`.
@@ -42,10 +42,11 @@ Wire up the endpoints that don't rely on Firestore or complex orchestration.
 
 This is the most complex endpoint (`generateSidequests`), combining Gemini, Maps, and Firestore.
 
-1. **Build the Orchestrator:** Write a private function that executes the full orchestration:
-   - Call the Gemini helper to get 10 structured quests.
-   - Loop through the quests. For any quest that needs a location, call your Maps helper.
-   - Merge the Maps `photoURL` and address back into the quest object.
+1. **Build the Orchestrator (Two-Pass Architecture):** Write a private function that executes the full orchestration:
+   - **Pass 1 (Scout):** Call the Gemini helper to generate 10 location concepts or search queries based on the user profile.
+   - **Location Fetch:** Use `Promise.all()` to call your Maps helper in _parallel_ for these 10 concepts, fetching rich location details (address, editorial summary, reviews).
+   - **Pass 2 (Writer):** Feed the rich location objects back to Gemini to generate the final, highly-tailored sidequests.
+   - Merge the Maps `photoURL` and coordinates back into the final quest objects.
 2. **Implement Profile Hashing:** Write a small utility function to generate a stable string hash from the user's `UserProfile` (interests, growthAreas, vibe, experimentationLevel, budget, transportation, locationPreferences, additionalContext, city).
 3. **Implement the Cache Check:** In the `generateSidequests` callable function, write the logic to read `pregenerated_batches/{deviceId}` from Firestore. Compare the stored `profileHash` with the current one.
 4. **Implement the Background Job:** Use Firebase's ability to run code after returning a response (in Node.js, you can start a Promise and return the HTTP response without awaiting it, though Firebase provides specific background task patterns as well). After serving the batch, asynchronously call your orchestrator to build the _next_ batch, and write it to Firestore.
