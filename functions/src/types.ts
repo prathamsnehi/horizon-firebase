@@ -8,16 +8,20 @@
 // general types:
 // --------------
 
+export type TransportationMode = "walking" | "publicTransport" | "car" | "bike" | "rideshare";
+
 export interface UserProfile {
     interests: string[];
     growthAreas: string[];
     vibe: string[];
     experimentationLevel: number; // e.g., 1 to 5
     budget: string[];
-    transportation: string[];
+    transportation: TransportationMode[];
     locationPreferences: string[];
     additionalContext: string | null;
     city: string;
+    cityLatitude?: number;
+    cityLongitude?: number;
 }
 
 // -------------------------
@@ -31,6 +35,12 @@ export interface SidequestRequest {
     deviceId: string;
 }
 
+export interface TransportationOption {
+    mode: TransportationMode
+    estimatedTravelMinutes: number;
+    isRecommended: boolean;
+}
+
 export interface LocationInformation {
     name: string;
     address: string;
@@ -39,15 +49,19 @@ export interface LocationInformation {
     longitude: number;
     photoURL: string;
     googleMapsURL: string;
+    distanceMiles?: number;
+    transportationOptions?: TransportationOption[];
 }
 
 export interface SidequestItem {
     title: string;
-    description: string;
+    questDescription: string;
     difficulty: "easy" | "moderate" | "hard" | "extreme";
-    estimatedTime: string;
+    estimatedActivityMinutes: number;
     categories: string[];
-    location: LocationInformation | null;
+    
+    // Location-Based Properties:
+    locationInformation?: LocationInformation;
 }
 
 export interface SidequestResponse {
@@ -65,6 +79,25 @@ export interface GetStartedRequest {
 
 export interface GetStartedResponse {
     steps: string[];
+}
+
+// ------------------------------
+// Gemini Orchestration Types (Two-Pass Architecture)
+// ------------------------------
+
+/**
+ * Represents a single search query intended for Google Maps
+ */
+export interface LocationConcept {
+    textQuery: string;
+    intendedDifficulty: "easy" | "moderate" | "hard" | "extreme";
+}
+
+/**
+ * The expected JSON structure returned by Gemini in Pass 1 (Scout)
+ */
+export interface LocationConceptsResponse {
+    locationConcepts: LocationConcept[];
 }
 
 // ------------------------------
