@@ -30,3 +30,5 @@ setGlobalOptions({maxInstances: 10});
 //   response.send("Hello from Firebase!");
 // });
 
+export * from "./controllers/sidequests";
+
