@@ -66,7 +66,7 @@ Generate a batch of sidequests based on the user's profile. The AI uses the prof
 
 _Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photos or no editorial description), that field will safely default to an empty string "" (or 0 for coordinates)._
 
-### 2. `generateGetStartedGuide`
+### 2. `generateGetStartedGuide` -> NOT YET IMPLEMENTED
 
 Generate a step-by-step guide for approaching a specific sidequest. Called on demand when the user taps "Get Started."
 
