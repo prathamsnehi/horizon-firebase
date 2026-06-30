@@ -18,7 +18,11 @@ function validateRequest(data: any): data is SidequestRequest {
 /**
  * Core orchestrator for generating sidequests using the Two-Pass Distance-Aware architecture.
  */
-export const generateSidequests = functions.https.onCall(async (request) => {
+export const generateSidequests = functions.https.onCall(
+    { 
+        enforceAppCheck: false // TODO: Set to true when ready for production
+    }, 
+    async (request) => {
     // 1. Validation & Auth
     if (!validateRequest(request.data)) {
         throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
@@ -27,10 +31,7 @@ export const generateSidequests = functions.https.onCall(async (request) => {
     const sidequestReq = request.data as SidequestRequest;
     const { profile, count, deviceId, excludeTitles } = sidequestReq;
 
-    // Optional: App Check verification (Uncomment when ready for production)
-    // if (request.app?.appId == null) {
-    //     throw new functions.https.HttpsError("unauthenticated", "App Check token missing.");
-    // }
+
 
     try {
         console.log(`[generateSidequests] Starting generation for device: ${deviceId}, count: ${count}`);
