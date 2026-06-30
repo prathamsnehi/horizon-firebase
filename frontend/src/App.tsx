@@ -7,6 +7,8 @@ import Discover from "./routes/app/Discover";
 import Completion from "./routes/app/Completion";
 import History from "./routes/app/History";
 import CompletedDetail from "./routes/app/CompletedDetail";
+import Settings from "./routes/app/Settings";
+import Dev from "./routes/app/Dev";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Landing /> },
@@ -21,6 +23,8 @@ export const router = createBrowserRouter([
       { path: "discover", element: <Discover /> },
       { path: "history", element: <History /> },
       { path: "history/:questId", element: <CompletedDetail /> },
+      { path: "settings", element: <Settings /> },
+      { path: "dev", element: <Dev /> },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },

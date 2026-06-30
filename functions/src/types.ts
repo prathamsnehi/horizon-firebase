@@ -64,8 +64,23 @@ export interface SidequestItem {
     locationInformation?: LocationInformation;
 }
 
+/**
+ * Per-stage server timings, attached to the response so the client can
+ * record where the latency goes. Optional & additive — older/other clients
+ * (e.g. iOS) simply ignore it. All values are milliseconds.
+ */
+export interface SidequestTimings {
+    scoutMs: number;            // Pass 1: Gemini location-concept generation
+    mapsMs: number;             // Google Maps resolution (parallel)
+    writerMs: number;           // Pass 2: Gemini sidequest writing
+    genericFallbackMs: number;  // Deficit-filling generic generation (0 if skipped)
+    totalServerMs: number;      // Whole handler, validation → response
+    coldStart: boolean;         // True if this invocation booted a fresh container
+}
+
 export interface SidequestResponse {
     sidequests: SidequestItem[] | null;
+    timings?: SidequestTimings;
 }
 
 // ------------------------------

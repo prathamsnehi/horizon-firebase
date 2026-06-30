@@ -1,5 +1,11 @@
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
-import { Compass, Home, History as HistoryIcon } from "lucide-react";
+import {
+  Compass,
+  Home,
+  History as HistoryIcon,
+  Settings as SettingsIcon,
+  FlaskConical,
+} from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Logo } from "../../components/Logo";
 import { ThemeToggle } from "../../components/ThemeToggle";
@@ -13,6 +19,8 @@ const NAV = [
   { to: "/app/home", label: "Home", icon: Home },
   { to: "/app/discover", label: "Discover", icon: Compass },
   { to: "/app/history", label: "History", icon: HistoryIcon },
+  { to: "/app/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/app/dev", label: "Dev", icon: FlaskConical },
 ];
 
 export default function AppLayout() {
