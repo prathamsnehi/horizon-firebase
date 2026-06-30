@@ -64,8 +64,23 @@ export interface SidequestItem {
     locationInformation?: LocationInformation;
 }
 
+/**
+ * Per-stage server timings, attached to the response so the client can
+ * record where the latency goes. Optional & additive — older/other clients
+ * (e.g. iOS) simply ignore it. All values are milliseconds.
+ */
+export interface SidequestTimings {
+    scoutMs: number;            // Pass 1: Gemini location-concept generation
+    mapsMs: number;             // Google Maps resolution (parallel)
+    writerMs: number;           // Pass 2: Gemini sidequest writing
+    genericFallbackMs: number;  // Deficit-filling generic generation (0 if skipped)
+    totalServerMs: number;      // Whole handler, validation → response
+    coldStart: boolean;         // True if this invocation booted a fresh container
+}
+
 export interface SidequestResponse {
     sidequests: SidequestItem[] | null;
+    timings?: SidequestTimings;
 }
 
 // ------------------------------
@@ -112,4 +127,17 @@ export interface PregeneratedBatchDocument {
     profileHash: string; // based on user's current preferences. pregen batch invalidates if user preferences change
     sidequests: SidequestItem[];
     createdAt: number; // Unix timestamp in milliseconds for easy TTL/expiration checks
+}
+
+/**
+ * Represents a document in the `scout_concepts` collection. Records the raw
+ * Pass 1 (Scout) output so we can inspect what location queries Gemini is
+ * producing for a given profile. Inspection/debugging only.
+ */
+export interface ScoutConceptsDocument {
+    deviceId: string;
+    city: string;
+    count: number;             // number of concepts generated
+    concepts: LocationConcept[];
+    createdAt: number;         // Unix timestamp in milliseconds
 }

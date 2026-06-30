@@ -1,7 +1,16 @@
-import {GoogleGenAI} from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { geminiApiKey } from "../config";
-import { UserProfile, LocationConcept, SidequestItem, LocationInformation } from "../types";
-import { buildLocationConceptsPrompt, buildSidequestWriterPrompt, buildGenericSidequestWriterPrompt } from "../utils/prompts";
+import {
+  UserProfile,
+  LocationConcept,
+  SidequestItem,
+  LocationInformation,
+} from "../types";
+import {
+  buildLocationConceptsPrompt,
+  buildSidequestWriterPrompt,
+  buildGenericSidequestWriterPrompt,
+} from "../utils/prompts";
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -13,7 +22,7 @@ function getAIClient(): GoogleGenAI {
   if (!aiClient) {
     // This is safe because it only runs when a function is actively executing
     aiClient = new GoogleGenAI({
-        apiKey: geminiApiKey.value()
+      apiKey: geminiApiKey.value(),
     });
   }
   return aiClient;
@@ -23,10 +32,10 @@ function getAIClient(): GoogleGenAI {
 export async function generateLocationConcepts(
   profile: UserProfile,
   count: number,
-  excludeTitles: string[] = []
+  excludeTitles: string[] = [],
 ): Promise<LocationConcept[]> {
   const ai = getAIClient();
-  
+
   const conceptsSchema = {
     type: "object",
     properties: {
@@ -38,34 +47,39 @@ export async function generateLocationConcepts(
           properties: {
             textQuery: {
               type: "string",
-              description: "A natural language search query for Google Maps Places API."
+              description:
+                "A natural language search query for Google Maps Places API.",
             },
             intendedDifficulty: {
               type: "string",
               enum: ["easy", "moderate", "hard", "extreme"],
-              description: "The intended difficulty/geographic scale of this location."
-            }
+              description:
+                "The intended difficulty/geographic scale of this location.",
+            },
           },
-          required: ["textQuery", "intendedDifficulty"]
-        }
-      }
+          required: ["textQuery", "intendedDifficulty"],
+        },
+      },
     },
-    required: ["locationConcepts"]
+    required: ["locationConcepts"],
   };
 
   const prompt = buildLocationConceptsPrompt(profile, count, excludeTitles);
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash",
+    model: "gemini-3.1-flash-lite",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
-      responseSchema: conceptsSchema
-    }
+      responseSchema: conceptsSchema,
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.MINIMAL,
+      },
+    },
   });
 
   if (!response.text) {
-      throw new Error("Gemini returned empty text.");
+    throw new Error("Gemini returned empty text.");
   }
 
   const parsed = JSON.parse(response.text);
@@ -77,14 +91,14 @@ export async function generateLocationConcepts(
  */
 export async function generateSidequestsWriter(
   profile: UserProfile,
-  locations: LocationInformation[]
+  locations: LocationInformation[],
 ): Promise<SidequestItem[]> {
   const ai = getAIClient();
 
   // Inject IDs to guarantee we map the exact untouched Maps data back later
   const locationsWithIds = locations.map((loc, index) => ({
     id: `loc_${index}`,
-    ...loc
+    ...loc,
   }));
 
   const writerSchema = {
@@ -97,33 +111,44 @@ export async function generateSidequestsWriter(
           properties: {
             title: { type: "string" },
             questDescription: { type: "string" },
-            difficulty: { 
-              type: "string", 
-              enum: ["easy", "moderate", "hard", "extreme"] 
-            },
-            estimatedActivityMinutes: { 
-              type: "integer",
-              description: "The time to complete the activity itself in minutes (do NOT include travel time)."
-            },
-            categories: { 
-              type: "array", 
-              items: { type: "string" } 
-            },
-            assignedLocationId: { 
+            difficulty: {
               type: "string",
-              description: "The id of the location provided in the prompt that this sidequest is based on."
+              enum: ["easy", "moderate", "hard", "extreme"],
+            },
+            estimatedActivityMinutes: {
+              type: "integer",
+              description:
+                "The time to complete the activity itself in minutes (do NOT include travel time).",
+            },
+            categories: {
+              type: "array",
+              items: { type: "string" },
+            },
+            assignedLocationId: {
+              type: "string",
+              description:
+                "The id of the location provided in the prompt that this sidequest is based on.",
             },
             recommendedTransportationMode: {
               type: "string",
               enum: ["walking", "publicTransport", "car", "bike", "rideshare"],
-              description: "The transportation mode you recommend for this specific sidequest, chosen from the location's available options."
-            }
+              description:
+                "The transportation mode you recommend for this specific sidequest, chosen from the location's available options.",
+            },
           },
-          required: ["title", "questDescription", "difficulty", "estimatedActivityMinutes", "categories", "assignedLocationId", "recommendedTransportationMode"]
-        }
-      }
+          required: [
+            "title",
+            "questDescription",
+            "difficulty",
+            "estimatedActivityMinutes",
+            "categories",
+            "assignedLocationId",
+            "recommendedTransportationMode",
+          ],
+        },
+      },
     },
-    required: ["sidequests"]
+    required: ["sidequests"],
   };
 
   const prompt = buildSidequestWriterPrompt(profile, locationsWithIds);
@@ -133,8 +158,8 @@ export async function generateSidequestsWriter(
     contents: prompt,
     config: {
       responseMimeType: "application/json",
-      responseSchema: writerSchema
-    }
+      responseSchema: writerSchema,
+    },
   });
 
   if (!response.text) {
@@ -146,21 +171,24 @@ export async function generateSidequestsWriter(
 
   // Re-attach the exact, untouched location data using the assignedLocationId
   const finalSidequests: SidequestItem[] = rawSidequests.map((sq: any) => {
-    const originalLocation = locationsWithIds.find(l => l.id === sq.assignedLocationId);
-    
+    const originalLocation = locationsWithIds.find(
+      (l) => l.id === sq.assignedLocationId,
+    );
+
     // Create a deep copy of the location without the temporary ID
     let locationInfo: LocationInformation | undefined = undefined;
     if (originalLocation) {
-        const { id, ...rest } = originalLocation;
-        locationInfo = rest as LocationInformation;
-        
-        // Apply the recommended mode to the transportationOptions array
-        if (locationInfo.transportationOptions) {
-            locationInfo.transportationOptions = locationInfo.transportationOptions.map(opt => ({
-                ...opt,
-                isRecommended: opt.mode === sq.recommendedTransportationMode
-            }));
-        }
+      const { id, ...rest } = originalLocation;
+      locationInfo = rest as LocationInformation;
+
+      // Apply the recommended mode to the transportationOptions array
+      if (locationInfo.transportationOptions) {
+        locationInfo.transportationOptions =
+          locationInfo.transportationOptions.map((opt) => ({
+            ...opt,
+            isRecommended: opt.mode === sq.recommendedTransportationMode,
+          }));
+      }
     }
 
     return {
@@ -169,7 +197,7 @@ export async function generateSidequestsWriter(
       difficulty: sq.difficulty,
       estimatedActivityMinutes: sq.estimatedActivityMinutes,
       categories: sq.categories,
-      locationInformation: locationInfo
+      locationInformation: locationInfo,
     };
   });
 
@@ -182,10 +210,10 @@ export async function generateSidequestsWriter(
 export async function generateGenericSidequests(
   profile: UserProfile,
   count: number,
-  excludeTitles: string[] = []
+  excludeTitles: string[] = [],
 ): Promise<SidequestItem[]> {
   if (count <= 0) return [];
-  
+
   const ai = getAIClient();
 
   const genericSchema = {
@@ -196,18 +224,34 @@ export async function generateGenericSidequests(
       properties: {
         title: { type: "string" },
         questDescription: { type: "string" },
-        difficulty: { type: "string", enum: ["easy", "moderate", "hard", "extreme"] },
-        estimatedActivityMinutes: { type: "integer", description: "Estimated activity duration in minutes" },
+        difficulty: {
+          type: "string",
+          enum: ["easy", "moderate", "hard", "extreme"],
+        },
+        estimatedActivityMinutes: {
+          type: "integer",
+          description: "Estimated activity duration in minutes",
+        },
         categories: {
           type: "array",
-          items: { type: "string" }
-        }
+          items: { type: "string" },
+        },
       },
-      required: ["title", "questDescription", "difficulty", "estimatedActivityMinutes", "categories"]
-    }
+      required: [
+        "title",
+        "questDescription",
+        "difficulty",
+        "estimatedActivityMinutes",
+        "categories",
+      ],
+    },
   };
 
-  const prompt = buildGenericSidequestWriterPrompt(profile, count, excludeTitles);
+  const prompt = buildGenericSidequestWriterPrompt(
+    profile,
+    count,
+    excludeTitles,
+  );
 
   const response = await ai.models.generateContent({
     model: "gemini-3.5-flash",
@@ -215,8 +259,8 @@ export async function generateGenericSidequests(
     config: {
       responseMimeType: "application/json",
       responseSchema: genericSchema,
-      temperature: 0.8
-    }
+      temperature: 0.8,
+    },
   });
 
   const text = response.text || "[]";
@@ -234,7 +278,7 @@ export async function generateGenericSidequests(
     questDescription: sq.questDescription,
     difficulty: sq.difficulty,
     estimatedActivityMinutes: sq.estimatedActivityMinutes,
-    categories: sq.categories
+    categories: sq.categories,
   }));
 
   return finalSidequests;
