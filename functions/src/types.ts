@@ -128,3 +128,16 @@ export interface PregeneratedBatchDocument {
     sidequests: SidequestItem[];
     createdAt: number; // Unix timestamp in milliseconds for easy TTL/expiration checks
 }
+
+/**
+ * Represents a document in the `scout_concepts` collection. Records the raw
+ * Pass 1 (Scout) output so we can inspect what location queries Gemini is
+ * producing for a given profile. Inspection/debugging only.
+ */
+export interface ScoutConceptsDocument {
+    deviceId: string;
+    city: string;
+    count: number;             // number of concepts generated
+    concepts: LocationConcept[];
+    createdAt: number;         // Unix timestamp in milliseconds
+}
