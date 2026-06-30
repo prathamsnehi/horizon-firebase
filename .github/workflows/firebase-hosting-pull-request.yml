@@ -43,3 +43,4 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HORIZON_SIDEQUESTS }}
           projectId: horizon-sidequests
+          firebaseToolsVersion: "14.6.0"
