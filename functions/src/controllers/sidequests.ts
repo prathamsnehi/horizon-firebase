@@ -2,6 +2,7 @@ import * as functions from "firebase-functions/v2";
 import { SidequestRequest, SidequestResponse, SidequestItem, SidequestTimings } from "../types";
 import { generateLocationConcepts, generateSidequestsWriter, generateGenericSidequests } from "../integrations/gemini";
 import { getRandomLocation } from "../integrations/maps";
+import { saveScoutConcepts } from "../integrations/firestore";
 import { calculateDistanceMiles, calculateAllTransportOptions } from "../utils/distance";
 import { geminiApiKey, placesApiKey } from "../config";
 
@@ -60,6 +61,11 @@ export const generateSidequests = functions.https.onCall(
         if (locationConcepts.length === 0) {
              throw new Error("Pass 1 failed to generate location concepts.");
         }
+
+        // Persist the raw Scout output for inspection. Kicked off now but
+        // awaited just before returning, so the write overlaps Maps + Writer
+        // and adds ~no latency. Best-effort — never throws.
+        const scoutPersist = saveScoutConcepts(deviceId, profile, locationConcepts);
 
         // --- STEP 2: LOCATION RESOLUTION (Maps API in parallel) ---
         console.log(`[generateSidequests] Resolving concepts via Google Maps API in parallel...`);
@@ -138,6 +144,9 @@ export const generateSidequests = functions.https.onCall(
         if (finalSidequests.length === 0) {
             throw new Error("Pass 2 failed to write any sidequests.");
         }
+
+        // Ensure the Scout-output write lands before the container can freeze.
+        await scoutPersist;
 
         // --- STEP 5: RETURN ---
         const timings: SidequestTimings = {
