@@ -21,7 +21,7 @@ function validateRequest(data: any): data is SidequestRequest {
  */
 export const generateSidequests = functions.https.onCall(
     { 
-        enforceAppCheck: false, // TODO: Set to true when ready for production
+        enforceAppCheck: true, // App Check, only iOS App and Website can access
         secrets: [geminiApiKey, placesApiKey]
     }, 
     async (request) => {

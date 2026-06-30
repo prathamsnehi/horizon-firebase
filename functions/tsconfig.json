@@ -11,7 +11,8 @@
     "strict": true,
     "target": "es2017",
     "types": ["jest"],
-    "isolatedModules": true
+    "isolatedModules": true,
+    "skipLibCheck": true
   },
   "compileOnSave": true,
   "include": [
