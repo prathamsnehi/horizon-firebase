@@ -1,7 +1,7 @@
 import {GoogleGenAI} from '@google/genai';
 import { geminiApiKey } from "../config";
 import { UserProfile, LocationConcept, SidequestItem, LocationInformation } from "../types";
-import { buildLocationConceptsPrompt, buildSidequestWriterPrompt } from "../utils/prompts";
+import { buildLocationConceptsPrompt, buildSidequestWriterPrompt, buildGenericSidequestWriterPrompt } from "../utils/prompts";
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -22,7 +22,8 @@ function getAIClient(): GoogleGenAI {
 // Then in your helper functions, just call getAIClient():
 export async function generateLocationConcepts(
   profile: UserProfile,
-  count: number
+  count: number,
+  excludeTitles: string[] = []
 ): Promise<LocationConcept[]> {
   const ai = getAIClient();
   
@@ -52,7 +53,7 @@ export async function generateLocationConcepts(
     required: ["locationConcepts"]
   };
 
-  const prompt = buildLocationConceptsPrompt(profile, count);
+  const prompt = buildLocationConceptsPrompt(profile, count, excludeTitles);
 
   const response = await ai.models.generateContent({
     model: "gemini-3.5-flash",
@@ -171,6 +172,70 @@ export async function generateSidequestsWriter(
       locationInformation: locationInfo
     };
   });
+
+  return finalSidequests;
+}
+
+/**
+ * Generates generic (no-location) sidequests to fill deficits when Maps API fails to resolve enough locations.
+ */
+export async function generateGenericSidequests(
+  profile: UserProfile,
+  count: number,
+  excludeTitles: string[] = []
+): Promise<SidequestItem[]> {
+  if (count <= 0) return [];
+  
+  const ai = getAIClient();
+
+  const genericSchema = {
+    type: "array",
+    description: "A list of generated generic sidequests.",
+    items: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        questDescription: { type: "string" },
+        difficulty: { type: "string", enum: ["easy", "moderate", "hard", "extreme"] },
+        estimatedActivityMinutes: { type: "integer", description: "Estimated activity duration in minutes" },
+        categories: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["title", "questDescription", "difficulty", "estimatedActivityMinutes", "categories"]
+    }
+  };
+
+  const prompt = buildGenericSidequestWriterPrompt(profile, count, excludeTitles);
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: genericSchema,
+      temperature: 0.8
+    }
+  });
+
+  const text = response.text || "[]";
+  let rawSidequests: any[] = [];
+  try {
+    rawSidequests = JSON.parse(text);
+  } catch (e) {
+    console.error("Failed to parse Gemini generic sidequests JSON:", text);
+    throw new Error("Invalid JSON from generic sidequest generation.");
+  }
+
+  // Map to the final SidequestItem interface (no locationInformation)
+  const finalSidequests: SidequestItem[] = rawSidequests.map((sq: any) => ({
+    title: sq.title,
+    questDescription: sq.questDescription,
+    difficulty: sq.difficulty,
+    estimatedActivityMinutes: sq.estimatedActivityMinutes,
+    categories: sq.categories
+  }));
 
   return finalSidequests;
 }

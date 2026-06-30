@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions/v2";
-import { SidequestRequest, SidequestResponse } from "../types";
-import { generateLocationConcepts, generateSidequestsWriter } from "../integrations/gemini";
+import { SidequestRequest, SidequestResponse, SidequestItem } from "../types";
+import { generateLocationConcepts, generateSidequestsWriter, generateGenericSidequests } from "../integrations/gemini";
 import { getRandomLocation } from "../integrations/maps";
 import { calculateDistanceMiles, calculateAllTransportOptions } from "../utils/distance";
 
@@ -25,7 +25,7 @@ export const generateSidequests = functions.https.onCall(async (request) => {
     }
 
     const sidequestReq = request.data as SidequestRequest;
-    const { profile, count, deviceId } = sidequestReq;
+    const { profile, count, deviceId, excludeTitles } = sidequestReq;
 
     // Optional: App Check verification (Uncomment when ready for production)
     // if (request.app?.appId == null) {
@@ -37,7 +37,7 @@ export const generateSidequests = functions.https.onCall(async (request) => {
 
         // --- PASS 1: SCOUT (Gemini generates abstract search queries) ---
         console.log(`[generateSidequests] Invoking Pass 1 (Scout)...`);
-        const locationConcepts = await generateLocationConcepts(profile, count);
+        const locationConcepts = await generateLocationConcepts(profile, count, excludeTitles || []);
         console.log(`[generateSidequests] Pass 1 generated ${locationConcepts.length} concepts.`);
 
         if (locationConcepts.length === 0) {
@@ -74,14 +74,40 @@ export const generateSidequests = functions.https.onCall(async (request) => {
                     transportationOptions: transportOpts
                 };
             } else {
-                return loc; // Passthrough if we lack base coordinates
+                // If we lack coordinates, supply generic transportation options with 0 minutes 
+                // so Gemini has valid enums to choose from.
+                const fallbackModes = profile.transportation.length > 0 ? profile.transportation : ["car" as any];
+                const fallbackTransportOpts = fallbackModes.map(mode => ({
+                    mode,
+                    estimatedTravelMinutes: 0,
+                    isRecommended: false
+                }));
+                return {
+                    ...loc,
+                    transportationOptions: fallbackTransportOpts
+                };
             }
         });
 
         // --- PASS 4: WRITER (Gemini writes final sidequests) ---
         console.log(`[generateSidequests] Invoking Pass 2 (Writer)...`);
-        const finalSidequests = await generateSidequestsWriter(profile, enrichedLocations);
-        console.log(`[generateSidequests] Pass 2 generated ${finalSidequests.length} sidequests.`);
+        
+        let finalSidequests: SidequestItem[] = [];
+
+        if (enrichedLocations.length > 0) {
+            const locationSidequests = await generateSidequestsWriter(profile, enrichedLocations);
+            finalSidequests.push(...locationSidequests);
+            console.log(`[generateSidequests] Pass 2 generated ${locationSidequests.length} location-based sidequests.`);
+        }
+
+        // --- STEP 4.5: GENERIC FALLBACK (Deficit Filling) ---
+        const deficit = count - finalSidequests.length;
+        if (deficit > 0) {
+            console.log(`[generateSidequests] Deficit of ${deficit} sidequests. Invoking Generic Fallback...`);
+            const genericSidequests = await generateGenericSidequests(profile, deficit, excludeTitles || []);
+            finalSidequests.push(...genericSidequests);
+            console.log(`[generateSidequests] Fallback generated ${genericSidequests.length} generic sidequests.`);
+        }
 
         // Validate we got at least some back
         if (finalSidequests.length === 0) {
