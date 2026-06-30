@@ -39,6 +39,10 @@ jobs:
           VITE_USE_MOCK: "false"
           VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
+        env:
+          # Route around flaky IPv6 paths to googleapis that cause
+          # intermittent "Premature close" errors on GitHub runners.
+          NODE_OPTIONS: --dns-result-order=ipv4first
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HORIZON_SIDEQUESTS }}
