@@ -31,4 +31,7 @@ yarn-error.log*
 .secret.*
 *.local
 
+# AI-Gen Files:
+.claude
+
 
