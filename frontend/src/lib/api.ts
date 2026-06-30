@@ -6,8 +6,16 @@ import type {
   SidequestItem,
   SidequestRequest,
   SidequestResponse,
+  SidequestTimings,
   UserProfile,
 } from "../types";
+
+/** Result of a generation call: the items plus optional server-side timings. */
+export interface GenerateResult {
+  items: SidequestItem[];
+  /** Present only for live calls; the backend attaches it. Undefined in mock. */
+  timings?: SidequestTimings;
+}
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
@@ -51,11 +59,13 @@ export async function generateSidequests(
   profile: UserProfile,
   count: number,
   excludeTitles: string[]
-): Promise<SidequestItem[]> {
+): Promise<GenerateResult> {
   if (isMockMode()) {
     // Simulate network latency so the "curating" state is exercised.
+    // Mock runs carry no timings (left undefined) so they're excluded from
+    // the dev breakdown.
     await new Promise((r) => setTimeout(r, 1200));
-    return pickMock(count, excludeTitles);
+    return { items: pickMock(count, excludeTitles) };
   }
 
   const payload: SidequestRequest = {
@@ -75,7 +85,7 @@ export async function generateSidequests(
     if (!sidequests || sidequests.length === 0) {
       throw new ApiError("generation_failed", "No sidequests were returned.");
     }
-    return sidequests;
+    return { items: sidequests, timings: res.data?.timings };
   } catch (err: unknown) {
     if (err instanceof ApiError) throw err;
     const e = err as { code?: string; message?: string };

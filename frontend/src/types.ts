@@ -67,8 +67,19 @@ export interface SidequestItem {
   locationInformation?: LocationInformation;
 }
 
+/** Per-stage server timings (ms), mirrored from functions/src/types.ts. */
+export interface SidequestTimings {
+  scoutMs: number;
+  mapsMs: number;
+  writerMs: number;
+  genericFallbackMs: number;
+  totalServerMs: number;
+  coldStart: boolean;
+}
+
 export interface SidequestResponse {
   sidequests: SidequestItem[] | null;
+  timings?: SidequestTimings;
 }
 
 // ---- Web-only view models (the iOS app's SwiftData equivalent) ----

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { generateSidequests, ApiError } from "../lib/api";
+import { generateSidequests, ApiError, isMockMode } from "../lib/api";
+import { useGenLog } from "../lib/genLog";
 import { placeholderIndexFor } from "../data/placeholders";
 import type {
   ProfileDraft,
@@ -45,6 +46,7 @@ interface AppState {
   resetDraft: () => void;
   completeOnboarding: (profile: UserProfile) => void;
   retakeOnboarding: () => void;
+  updateProfile: (profile: UserProfile) => void;
 
   // Generation
   generateBatch: () => Promise<void>;
@@ -88,17 +90,27 @@ export const useAppStore = create<AppState>()(
       retakeOnboarding: () =>
         set({ hasCompletedOnboarding: false, draft: get().profile ?? {} }),
 
+      updateProfile: (profile) => set({ profile }),
+
       clearError: () => set({ error: null }),
 
       generateBatch: async () => {
         const { profile, quests } = get();
         if (!profile) throw new Error("No profile to generate from.");
         set({ generating: true, error: null });
+        const requestedCount = 10;
+        const startedAt = Date.now();
+        const t0 = performance.now();
+        const mode = isMockMode() ? "mock" : "live";
         try {
           const completedTitles = quests
             .filter((q) => q.status === "completed")
             .map((q) => q.title);
-          const items = await generateSidequests(profile, 10, completedTitles);
+          const { items, timings } = await generateSidequests(
+            profile,
+            requestedCount,
+            completedTitles
+          );
           const batchId = uuid();
           // Regenerating clears remaining available/skipped; keep active + history.
           const kept = quests.filter(
@@ -110,12 +122,32 @@ export const useAppStore = create<AppState>()(
             currentBatchId: batchId,
             generating: false,
           });
+          useGenLog.getState().addEntry({
+            startedAt,
+            durationMs: Math.round(performance.now() - t0),
+            requestedCount,
+            returnedCount: items.length,
+            status: "success",
+            mode,
+            city: profile.city,
+            timings,
+          });
         } catch (e) {
           const message =
             e instanceof ApiError
               ? e.message
               : "Something went wrong while curating your sidequests.";
           set({ generating: false, error: message });
+          useGenLog.getState().addEntry({
+            startedAt,
+            durationMs: Math.round(performance.now() - t0),
+            requestedCount,
+            returnedCount: 0,
+            status: "error",
+            mode,
+            city: profile.city,
+            errorMessage: message,
+          });
           throw e;
         }
       },
