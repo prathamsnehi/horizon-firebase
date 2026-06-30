@@ -1,7 +1,7 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
   initializeAppCheck,
-  ReCaptchaV3Provider,
+  ReCaptchaEnterpriseProvider,
 } from "firebase/app-check";
 import { getFunctions, type Functions } from "firebase/functions";
 
@@ -52,7 +52,8 @@ export function getAppFunctions(): Functions {
     // backend enforces App Check this key must be set in production.
     if (recaptchaSiteKey) {
       initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        // reCAPTCHA Enterprise key (created in Google Cloud console).
+        provider: new ReCaptchaEnterpriseProvider(recaptchaSiteKey),
         isTokenAutoRefreshEnabled: true,
       });
     } else if (import.meta.env.PROD) {

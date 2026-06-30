@@ -41,3 +41,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HORIZON_SIDEQUESTS }}
           channelId: live
           projectId: horizon-sidequests
+          firebaseToolsVersion: "14.6.0"
