@@ -3,6 +3,7 @@ import { SidequestRequest, SidequestResponse, SidequestItem } from "../types";
 import { generateLocationConcepts, generateSidequestsWriter, generateGenericSidequests } from "../integrations/gemini";
 import { getRandomLocation } from "../integrations/maps";
 import { calculateDistanceMiles, calculateAllTransportOptions } from "../utils/distance";
+import { geminiApiKey, placesApiKey } from "../config";
 
 /**
  * Validates the incoming payload structure.
@@ -20,7 +21,8 @@ function validateRequest(data: any): data is SidequestRequest {
  */
 export const generateSidequests = functions.https.onCall(
     { 
-        enforceAppCheck: false // TODO: Set to true when ready for production
+        enforceAppCheck: false, // TODO: Set to true when ready for production
+        secrets: [geminiApiKey, placesApiKey]
     }, 
     async (request) => {
     // 1. Validation & Auth
