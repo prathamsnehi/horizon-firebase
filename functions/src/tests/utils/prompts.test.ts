@@ -1,4 +1,4 @@
-import { buildLocationConceptsPrompt, buildSidequestWriterPrompt } from "../../utils/prompts";
+import { buildLocationConceptsPrompt, buildSidequestWriterPrompt, buildGenericSidequestWriterPrompt } from "../../utils/prompts";
 import { UserProfile, LocationInformation } from "../../types";
 
 describe("prompts utils", () => {
@@ -50,6 +50,28 @@ describe("prompts utils", () => {
             
             expect(prompt).toContain("'estimatedActivityMinutes' must reflect the activity time in minutes");
             expect(prompt).toContain("assignedLocationId");
+        });
+    });
+
+    describe("buildGenericSidequestWriterPrompt", () => {
+        it("should request the correct number of generic sidequests", () => {
+            const prompt = buildGenericSidequestWriterPrompt(mockProfile, 3);
+            expect(prompt).toContain("Write exactly 3 generic");
+            expect(prompt).toContain("Generate exactly 3 sidequests");
+        });
+
+        it("should instruct the AI to make quests generic since they lack specific locations", () => {
+            const prompt = buildGenericSidequestWriterPrompt(mockProfile, 3);
+            expect(prompt).toContain("MUST be generic");
+            expect(prompt).toContain("not be tied to a specific Google Maps location");
+            expect(prompt).toContain("Interests: coffee,hiking");
+            expect(prompt).toContain("Vibe: chill");
+        });
+
+        it("should include excludeTitles rule when provided", () => {
+            const prompt = buildGenericSidequestWriterPrompt(mockProfile, 1, ["Making Coffee", "Journaling"]);
+            expect(prompt).toContain("Making Coffee, Journaling");
+            expect(prompt).toContain("Do NOT generate quests similar");
         });
     });
 });
