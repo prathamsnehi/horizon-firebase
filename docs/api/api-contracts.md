@@ -24,10 +24,12 @@ Generate a batch of sidequests based on the user's profile. The AI uses the prof
     "vibe": ["string"],
     "experimentationLevel": 1,
     "budget": ["string"],
-    "transportation": ["string"],
+    "transportation": ["walking" | "publicTransport" | "car" | "bike" | "rideshare"],
     "locationPreferences": ["string"],
     "additionalContext": "string or null",
-    "city": "string"
+    "city": "string",
+    "cityLatitude": 37.7749,
+    "cityLongitude": -122.4194
   },
   "count": 10,
   "excludeTitles": ["string"],
@@ -35,7 +37,11 @@ Generate a batch of sidequests based on the user's profile. The AI uses the prof
 }
 ```
 
-`count` is always 10 for batch generation. `excludeTitles` contains titles of recently completed sidequests to avoid duplicates. `deviceId` is used for fetching pre-generated batches from Firestore and for rate-limiting.
+`count` is the number of sidequests to generate (typically 10). `excludeTitles` contains titles of recently completed sidequests to avoid duplicates. `deviceId` identifies the requesting device.
+
+`cityLatitude`/`cityLongitude` are optional. When both are present, the backend computes straight-line distance and per-mode travel-time estimates for each resolved location; when absent, distance is omitted and transportation options fall back to `0`-minute placeholders.
+
+_Validation: the backend requires `profile` (object), `count` (number), and `deviceId` (string). A missing or malformed field returns an `invalid-argument` error._
 
 **App Behavior:** The app calls this endpoint and waits for a response. If a pre-generated batch is available on the backend, the response will be instant. If a fresh batch needs to be generated (e.g. first time, or profile changed), it may take a few seconds. The app should show a "curating" state (e.g., "New sidequests are being curated for you...") if the request takes longer than 2 seconds.
 
@@ -46,48 +52,63 @@ Generate a batch of sidequests based on the user's profile. The AI uses the prof
     "sidequests": [
         {
             "title": "string",
-            "description": "string",
+            "questDescription": "string",
             "difficulty": "easy" | "moderate" | "hard" | "extreme",
-            "estimatedTime": "1 Hour",
+            "estimatedActivityMinutes": 60,
             "categories": ["string"],
-            "location": {
+            "locationInformation": {
                 "name": "string",
                 "address": "string",
                 "description": "string",
                 "latitude": 37.7694,
                 "longitude": -122.4862,
                 "photoURL": "string",
-                "googleMapsURL": "string"
-            } | null
+                "googleMapsURL": "string",
+                "distanceMiles": 2.4,
+                "transportationOptions": [
+                    {
+                        "mode": "walking" | "publicTransport" | "car" | "bike" | "rideshare",
+                        "estimatedTravelMinutes": 15,
+                        "isRecommended": true
+                    }
+                ]
+            }
         }
-    ]
+    ],
+    "timings": {
+        "scoutMs": 0,
+        "mapsMs": 0,
+        "writerMs": 0,
+        "genericFallbackMs": 0,
+        "totalServerMs": 0,
+        "coldStart": false
+    }
 }
 ```
 
-_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photos or no editorial description), that field will safely default to an empty string "" (or 0 for coordinates)._
+**Field notes:**
+
+- `estimatedActivityMinutes` is an integer count of minutes for the activity itself and **excludes** travel time.
+- `locationInformation` is omitted for generic (no-location) sidequests — these are produced as a fallback when Maps cannot resolve enough real locations. The client should treat its absence as "at-home / location-agnostic."
+- `distanceMiles` and `transportationOptions` are only present when the request included `cityLatitude`/`cityLongitude`. Exactly one option has `isRecommended: true`, chosen by the Writer model.
+- `timings` is optional, additive server-side latency telemetry (per-stage milliseconds plus a cold-start flag). Clients that don't need it can safely ignore it.
+
+_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photos or no editorial description), that field safely defaults to an empty string `""` (or `0` for coordinates)._
 
 ### 2. `generateGetStartedGuide` -> NOT YET IMPLEMENTED
 
 Generate a step-by-step guide for approaching a specific sidequest. Called on demand when the user taps "Get Started."
 
-**Request:**
+**Request:** _(shapes defined in `types.ts` as `GetStartedRequest`; the handler is not yet wired up)_
 
 ```json
 {
-  "sidequest": {
-    "title": "string",
-    "description": "string",
-    "categories": ["string"]
-  },
-  "profile": {
-    "interests": ["string"],
-    "growthAreas": ["string"],
-    "additionalContext": "string or null"
-  }
+  "sidequest": { "...": "a full SidequestItem (see the generateSidequests response)" },
+  "profile": { "...": "a full UserProfile (see the generateSidequests request)" }
 }
 ```
 
-**Response:**
+**Response:** _(`GetStartedResponse`)_
 
 ```json
 {
@@ -99,32 +120,16 @@ Generate a step-by-step guide for approaching a specific sidequest. Called on de
 
 ## Error Handling
 
-All endpoints return standard error responses:
+Errors are surfaced as Firebase `HttpsError`, so the client receives a standard `{ code, message }` via the callable SDK. Codes currently emitted by `generateSidequests`:
 
-```json
-{
-  "error": {
-    "code": "string",
-    "message": "string"
-  }
-}
-```
+- `invalid-argument` — the payload failed validation (missing/malformed `profile`, `count`, or `deviceId`).
+- `internal` — generation failed downstream (e.g., the Scout pass produced no concepts, or the Writer produced no sidequests). Show a retry button.
 
-Common error codes:
-
-- `rate_limited` — too many requests, show cooldown UI
-- `invalid_request` — malformed request, log and retry
-- `generation_failed` — AI generation failed, show retry button
-- `service_unavailable` — backend down, show offline state
+_App Check is enforced (`enforceAppCheck: true`). Requests without a valid App Check token are rejected by Firebase before the handler runs._
 
 ## Rate Limiting
 
-Rate limits are enforced server-side per device identifier (vendor ID or similar). Suggested limits:
-
-- `generateSidequests` — 5 calls per hour (normal usage is \~1 call per session — one batch on completion)
-- `generateGetStartedGuide` — 10 calls per hour
-
-The app should handle `rate_limited` gracefully with a user-friendly message and countdown.
+Not yet implemented. Rate limiting per `deviceId` is planned (see `production-architecture.md`), with target limits of roughly `generateSidequests` — 5 calls/hour and `generateGetStartedGuide` — 10 calls/hour. Until it lands, no `rate_limited` code is returned. Clients should still be prepared to handle a future rate-limit response gracefully with a cooldown UI.
 
 ## Backend Orchestration — Gemini + Google Maps
 
@@ -154,18 +159,19 @@ Mobile App                    Cloud Function                     External APIs
     │                              │   resource identifier + API key  │
     │                              │                                  │
     │ ←── { sidequests[] } ────── │                                  │
-    │     (with location.photoURL  │                                  │
-    │      = constructed media URL)│                                  │
+    │  (locationInformation.photoURL│                                  │
+    │      = constructed media URL) │                                  │
 ```
 
 ### What the Cloud Function does:
 
-1. **Pass 1 (Scout):** Sends the user's profile to **Gemini** to generate 10 high-level location concepts/queries.
-2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** in parallel using `Promise.all()` to fetch rich details for those 10 concepts (address, coordinates, summary, reviews, and photo references).
-3. **Pass 2 (Writer):** Sends the profile AND the 10 rich Maps locations back to Gemini to generate 10 highly-tailored sidequests.
-4. The Places API returns a **photo resource identifier** (`name` field) for each photo — not a URL or raw image data. Example: `"places/ChIJN1t.../photos/AUacShh3Z..."`
-5. Cloud Function constructs a **media URL** from the resource identifier: `https://places.googleapis.com/v1/{photo_name}/media?key=API_KEY&maxHeightPx=600`
-6. Returns this constructed URL as `photoURL` in the response — the app fetches and caches the image directly from Google
+1. **Pass 1 (Scout):** Sends the user's profile to **Gemini** (`gemini-3.1-flash-lite`, minimal thinking, structured JSON output) to generate `count` high-level location concepts/queries, each tagged with an `intendedDifficulty` that maps to geographic scale.
+2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** `places:searchText` in parallel using `Promise.all()` to fetch rich details for those concepts (address, coordinates, editorial summary, photo references, maps URI). One place is currently selected at **random** from each query's result pool. Queries that return nothing are dropped (partial success — the batch continues with whatever resolved).
+3. **Distance & transport math (local):** For each resolved location, if the request supplied `cityLatitude`/`cityLongitude`, the function computes a Haversine `distanceMiles` and heuristic per-mode `transportationOptions`. No external call.
+4. **Pass 2 (Writer):** Sends the profile AND the enriched Maps locations back to **Gemini** (`gemini-3.5-flash`, structured JSON) to write highly-tailored sidequests. The model only selects an `assignedLocationId` and a `recommendedTransportationMode`; the backend re-attaches the exact, untouched Maps data by ID afterward so the LLM cannot corrupt real addresses/coordinates/URLs.
+5. **Generic fallback (deficit filling):** If fewer locations resolved than `count`, the shortfall is filled with location-agnostic quests via a separate Gemini call. These come back **without** `locationInformation`.
+6. The Places API returns a **photo resource identifier** (`name` field) for each photo — not a URL or raw image data. Example: `"places/ChIJN1t.../photos/AUacShh3Z..."`
+7. Cloud Function constructs a **media URL** from the resource identifier: `https://places.googleapis.com/v1/{photo_name}/media?key=API_KEY&maxHeightPx=600` and returns it as `photoURL` — the app fetches and caches the image directly from Google.
 
 ### Security
 
@@ -175,7 +181,7 @@ Mobile App                    Cloud Function                     External APIs
 
 ### What the app receives
 
-The app doesn't know about Gemini or the orchestration details. It just receives a sidequest with an optional `location` object containing `address`, `latitude`, `longitude`, and `photoURL`. The `photoURL` is a Google Maps media URL that the app loads directly.
+The app doesn't know about Gemini or the orchestration details. It just receives a sidequest with an optional `locationInformation` object containing `address`, `latitude`, `longitude`, `photoURL`, and (when city coordinates were supplied) `distanceMiles` and `transportationOptions`. The `photoURL` is a Google Maps media URL that the app loads directly.
 
 ### Image loading on the app side
 
