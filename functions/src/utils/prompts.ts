@@ -2,30 +2,42 @@ import { UserProfile } from "../types";
 
 /**
  * Builds the prompt for Pass 1 (Scout) to generate location concepts.
- * 
+ *
  * @param profile - The user's detailed profile
  * @param count - The number of location concepts to generate
  * @returns The formatted prompt string
  */
-export function buildLocationConceptsPrompt(profile: UserProfile, count: number, excludeTitles: string[] = []): string {
+export function buildLocationConceptsPrompt(
+  profile: UserProfile,
+  count: number,
+  excludeTitles: string[] = [],
+): string {
   // Compress profile to reduce tokens
   const interests = profile.interests.join(",") || "None";
   const vibe = profile.vibe.join(",") || "None";
   const locationPreferences = profile.locationPreferences.join(",") || "None";
-  
-  return `Generate EXACTLY ${count} location search queries for Google Maps Places API.
+
+  return `You are a sharp, well-traveled local in ${profile.city} with genuinely great taste — the kind of person whose recommendations people actually act on. Produce EXACTLY ${count} Google Maps search queries that each resolve to a specific, real, well-regarded place worth going out of your way for.
 
 USER:
 Interests: ${interests} | Vibe: ${vibe} | Location Prefs: ${locationPreferences}
 City: ${profile.city}
 
-EXPERIMENTATION LEVEL (${profile.experimentationLevel}/5):
-1: Strict adherence to interests. No surprises.
-2: Safe variations of interests.
-3: Balanced mix of interests and related activities.
-4: Generate a few wildcard queries outside stated interests.
-5: Exactly half MUST strictly align with interests, half MUST completely ignore interests for extreme novelty.
-If experimentation level is 5 and count is 1, go for ignoring interests
+HOW TO CHOOSE (this matters most):
+- Quality over novelty. Recommend places you'd genuinely vouch for — not obscure things picked to seem quirky. A great neighborhood spot beats a weird one.
+- Go deep, not wide. Do NOT map one interest to one query. Pick 2-3 threads from their interests to center this batch on and explore each from different angles; let the rest sit this round.
+- Synthesize interests where you can (e.g. coffee + photography -> "riverside cafe known for the photography prints on its walls").
+- Write FINDABLE queries. Each must target a place that exists as a real business/POI with reviews (a specific cafe, studio, trailhead, market, gallery). Avoid abstractions Maps can't resolve ("urban exploration sites", "ghost tour starting points", "rockhounding spots").
+- Refrain from padding queries with hollow hype ("best hidden", "authentic", "niche").
+
+VIBE is for tone, not obscurity. A "chaotic/quirky" vibe means lively, playful places — not weird-for-weird's-sake.
+
+EXPERIMENTATION LEVEL (${profile.experimentationLevel}/5) — how far to roam from core interests, WITHOUT lowering the quality bar:
+1: Tightly on stated interests.
+2: Interests + safe adjacent picks.
+3: Mostly core, some tasteful adjacent discoveries.
+4: A couple of confident wildcards a friend would insist on — still genuinely good.
+5: Half core, half bold discoveries — bold in kind, never in quality.
 
 GEOGRAPHIC SCALING (Assign 'intendedDifficulty'):
 - easy/moderate: Local to ${profile.city} (e.g. coffee shop, neighborhood park).
@@ -33,19 +45,20 @@ GEOGRAPHIC SCALING (Assign 'intendedDifficulty'):
 - extreme: Remote wilderness or out-of-state road trips.
 
 RULES:
-- Be creative and specific (e.g. "late night diners in ${profile.city}", "remote cabins in neighboring county").
-- Assign 'intendedDifficulty' to match the geographic scale.
-- Include the city/region name in the query so Maps searches the correct area.
-- You may specify a radius of search within the query, but not a compulsion
-- Think out of the box. Do not just use these examples.
-${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate location concepts that are similar to these recently completed sidequests: ${excludeTitles.join(", ")}` : ""}.
+- Include the city/region name in every query so Maps searches the correct area.
+- Assign 'intendedDifficulty' to match the real geographic scale.
+- You may specify a radius of search within the query, but it is not compulsory.
+${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate location concepts similar to these recently completed sidequests: ${excludeTitles.join(", ")}` : ""}
 `;
 }
 
 /**
  * Builds the prompt for Pass 2 (Writer) to generate final sidequests.
  */
-export function buildSidequestWriterPrompt(profile: UserProfile, mapsResults: any[]): string {
+export function buildSidequestWriterPrompt(
+  profile: UserProfile,
+  mapsResults: any[],
+): string {
   return `Write the final sidequests based on the real locations provided.
 
 USER PROFILE:
@@ -67,7 +80,11 @@ RULES:
  * Builds the prompt for generating generic, at-home, or location-agnostic sidequests.
  * This is used as a graceful fallback when Maps API fails to resolve locations.
  */
-export function buildGenericSidequestWriterPrompt(profile: UserProfile, count: number, excludeTitles: string[] = []): string {
+export function buildGenericSidequestWriterPrompt(
+  profile: UserProfile,
+  count: number,
+  excludeTitles: string[] = [],
+): string {
   return `Write exactly ${count} generic, at-home, or location-agnostic sidequests.
 
 USER PROFILE:

@@ -10,7 +10,7 @@ async function fetchPlaces(queryText: string, maxResults = 10) {
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": placesApiKey.value(),
-      "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.editorialSummary,places.photos,places.googleMapsUri",
+      "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.editorialSummary,places.photos,places.googleMapsUri,places.rating,places.userRatingCount,places.businessStatus",
     },
     body: JSON.stringify({
       textQuery: queryText,
@@ -75,4 +75,50 @@ export async function getRandomLocation(queryText: string): Promise<LocationInfo
 
   const randomIndex = Math.floor(Math.random() * places.length);
   return mapPlaceToLocation(places[randomIndex]);
+}
+
+// Number of top-ranked candidates to randomize among in getBestLocation.
+const QUALITY_TOP_POOL = 3;
+
+/**
+ * Computes a quality score for a raw Google Place. Rating is weighted by review
+ * volume (log-dampened) so a 4.9 with 3 reviews doesn't outrank a 4.6 with
+ * thousands, while runaway-popular places don't dominate purely on count.
+ * Missing rating/count sink to 0.
+ */
+function qualityScore(place: any): number {
+  const rating = typeof place.rating === "number" ? place.rating : 0;
+  const count = typeof place.userRatingCount === "number" ? place.userRatingCount : 0;
+  return rating * Math.log10(count + 1);
+}
+
+/**
+ * Returns a high-quality location for the query. Ranks the result pool by a
+ * rating × review-volume score (dropping permanently/temporarily closed
+ * places), then picks randomly among the top few candidates rather than always
+ * the strict #1 — so users with similar profiles in the same city don't all
+ * receive the identical place (and the future global cache stays varied),
+ * while keeping quality high. Diversity across a batch already comes from the
+ * distinct queries, so we don't need randomness for variety here.
+ */
+export async function getBestLocation(queryText: string): Promise<LocationInformation | null> {
+  const places = await fetchPlaces(queryText, 10);
+
+  const openPlaces = places.filter(
+    (p: any) =>
+      p.businessStatus !== "CLOSED_PERMANENTLY" &&
+      p.businessStatus !== "CLOSED_TEMPORARILY"
+  );
+
+  if (openPlaces.length === 0) {
+    return null;
+  }
+
+  const ranked = openPlaces
+    .map((place: any) => ({ place, score: qualityScore(place) }))
+    .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+
+  const topPool = ranked.slice(0, QUALITY_TOP_POOL);
+  const pick = topPool[Math.floor(Math.random() * topPool.length)];
+  return mapPlaceToLocation(pick.place);
 }

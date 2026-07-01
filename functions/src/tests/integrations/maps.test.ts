@@ -1,4 +1,4 @@
-import {getTopLocation, getRandomLocation} from "../../integrations/maps";
+import {getTopLocation, getRandomLocation, getBestLocation} from "../../integrations/maps";
 
 // Mock the config so we don't try to read real Secret Manager values
 jest.mock("../../config", () => ({
@@ -101,5 +101,104 @@ describe("Maps Integration", () => {
 
     expect(result).not.toBeNull();
     expect(["Place A", "Place B", "Place C"]).toContain(result?.name);
+  });
+
+  describe("getBestLocation", () => {
+    // Force the "pick among top pool" randomness to a deterministic index so we
+    // can assert on ranking. 0 -> the top-ranked candidate.
+    function mockRandom(value: number) {
+      return jest.spyOn(Math, "random").mockReturnValue(value);
+    }
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    function mockPlaces(places: any[]) {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({places}),
+      });
+    }
+
+    it("ranks by rating weighted by review volume and returns the strongest place", async () => {
+      mockRandom(0); // pick the #1 ranked candidate
+      mockPlaces([
+        // High rating but almost no reviews — should NOT win.
+        {displayName: {text: "New Trap Cafe"}, rating: 4.9, userRatingCount: 3},
+        // Slightly lower rating but a huge, trustworthy review base — should win.
+        {displayName: {text: "Beloved Institution"}, rating: 4.6, userRatingCount: 2000},
+        {displayName: {text: "Mediocre Spot"}, rating: 3.8, userRatingCount: 500},
+      ]);
+
+      const result = await getBestLocation("cafes");
+
+      expect(result?.name).toBe("Beloved Institution");
+    });
+
+    it("excludes permanently and temporarily closed places even if top-rated", async () => {
+      mockRandom(0);
+      mockPlaces([
+        {displayName: {text: "Great But Gone"}, rating: 4.8, userRatingCount: 5000, businessStatus: "CLOSED_PERMANENTLY"},
+        {displayName: {text: "On Vacation"}, rating: 4.7, userRatingCount: 4000, businessStatus: "CLOSED_TEMPORARILY"},
+        {displayName: {text: "Open For Business"}, rating: 4.5, userRatingCount: 1000, businessStatus: "OPERATIONAL"},
+      ]);
+
+      const result = await getBestLocation("bakeries");
+
+      expect(result?.name).toBe("Open For Business");
+    });
+
+    it("only ever returns a place from the top pool, never a low-ranked one", async () => {
+      // Five places with strictly descending quality scores. Top pool is 3, so
+      // P4/P5 must never surface regardless of the random draw.
+      mockPlaces([
+        {displayName: {text: "P1"}, rating: 4.9, userRatingCount: 5000},
+        {displayName: {text: "P2"}, rating: 4.7, userRatingCount: 4000},
+        {displayName: {text: "P3"}, rating: 4.5, userRatingCount: 3000},
+        {displayName: {text: "P4"}, rating: 4.2, userRatingCount: 100},
+        {displayName: {text: "P5"}, rating: 3.9, userRatingCount: 50},
+      ]);
+
+      // Sweep the random draw across the whole [0,1) range.
+      for (const r of [0, 0.34, 0.66, 0.99]) {
+        mockRandom(r);
+        const result = await getBestLocation("parks");
+        expect(["P1", "P2", "P3"]).toContain(result?.name);
+        expect(["P4", "P5"]).not.toContain(result?.name);
+        jest.restoreAllMocks();
+      }
+    });
+
+    it("treats missing rating/review fields as lowest quality", async () => {
+      mockRandom(0);
+      mockPlaces([
+        {displayName: {text: "Unrated"}}, // no rating/count -> score 0
+        {displayName: {text: "Rated"}, rating: 4.0, userRatingCount: 200},
+      ]);
+
+      const result = await getBestLocation("shops");
+
+      expect(result?.name).toBe("Rated");
+    });
+
+    it("returns null when every candidate is closed", async () => {
+      mockPlaces([
+        {displayName: {text: "Closed A"}, rating: 4.8, userRatingCount: 900, businessStatus: "CLOSED_PERMANENTLY"},
+        {displayName: {text: "Closed B"}, rating: 4.6, userRatingCount: 700, businessStatus: "CLOSED_TEMPORARILY"},
+      ]);
+
+      const result = await getBestLocation("nightclubs");
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null when the pool is empty", async () => {
+      mockPlaces([]);
+
+      const result = await getBestLocation("nonexistent place");
+
+      expect(result).toBeNull();
+    });
   });
 });

@@ -98,7 +98,7 @@ export const useAppStore = create<AppState>()(
         const { profile, quests } = get();
         if (!profile) throw new Error("No profile to generate from.");
         set({ generating: true, error: null });
-        const requestedCount = 10;
+        const requestedCount = 5;
         const startedAt = Date.now();
         const t0 = performance.now();
         const mode = isMockMode() ? "mock" : "live";

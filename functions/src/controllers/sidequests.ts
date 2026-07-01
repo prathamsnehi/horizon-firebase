@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions/v2";
 import { SidequestRequest, SidequestResponse, SidequestItem, SidequestTimings } from "../types";
 import { generateLocationConcepts, generateSidequestsWriter, generateGenericSidequests } from "../integrations/gemini";
-import { getRandomLocation } from "../integrations/maps";
+import { getBestLocation } from "../integrations/maps";
 import { saveScoutConcepts } from "../integrations/firestore";
 import { calculateDistanceMiles, calculateAllTransportOptions } from "../utils/distance";
 import { geminiApiKey, placesApiKey } from "../config";
@@ -26,6 +26,34 @@ function validateRequest(data: any): data is SidequestRequest {
 
 /**
  * Core orchestrator for generating sidequests using the Two-Pass Distance-Aware architecture.
+ *
+ * This is a Firebase 2nd-gen callable (`onCall`), so all inputs arrive on
+ * `request.data` and must satisfy the {@link SidequestRequest} shape (enforced by
+ * {@link validateRequest}). App Check is required — only the genuine iOS app and
+ * website can invoke it.
+ *
+ * Expected `request.data` fields:
+ * - `profile` ({@link UserProfile}, required) — the user's onboarding profile. Drives
+ *   every stage. Notable fields the orchestrator reads directly:
+ *     - `interests`, `vibe`, `locationPreferences`, `experimentationLevel` — shape the
+ *       Scout (Pass 1) search queries.
+ *     - `city` — anchors those queries to the correct geographic area.
+ *     - `cityLatitude` / `cityLongitude` (optional) — when BOTH are present, per-location
+ *       distance and heuristic travel times are computed (Step 3); when absent, distance
+ *       is skipped and transport options fall back to 0-minute placeholders.
+ *     - `transportation` — the candidate modes for the travel-time math.
+ *     - `growthAreas`, `additionalContext` — feed the Writer (Pass 2) and generic fallback.
+ * - `count` (number, required) — how many sidequests to generate. Sets the number of Scout
+ *   concepts / parallel Maps calls, and the target the generic fallback fills up to. The web
+ *   client currently requests 5.
+ * - `deviceId` (string, required) — identifies the requesting device. Used for logging and
+ *   for tagging the persisted Scout output; not used for rate-limiting yet.
+ * - `excludeTitles` (string[], optional) — titles of recently completed sidequests to avoid
+ *   repeating. Passed to both the Scout and the generic fallback. Defaults to [] when omitted.
+ *
+ * Returns a {@link SidequestResponse}: the generated `sidequests` plus optional per-stage
+ * `timings`. Throws `invalid-argument` on a malformed payload and `internal` if generation
+ * fails outright (no concepts, or no sidequests written).
  */
 export const generateSidequests = functions.https.onCall(
     { 
@@ -69,9 +97,9 @@ export const generateSidequests = functions.https.onCall(
 
         // --- STEP 2: LOCATION RESOLUTION (Maps API in parallel) ---
         console.log(`[generateSidequests] Resolving concepts via Google Maps API in parallel...`);
-        // TODO: choosing a random location, but implement a mechanism that decides if the randomLocation is called
-        // or the topLocation is called from /integrations/maps.ts
-        const mapsPromises = locationConcepts.map(concept => getRandomLocation(concept.textQuery));
+        // Resolve each concept to a high-quality place: ranked by rating × review
+        // volume, randomized among the top few for variety (see getBestLocation).
+        const mapsPromises = locationConcepts.map(concept => getBestLocation(concept.textQuery));
         const tMaps = Date.now();
         const rawMapsResults = await Promise.all(mapsPromises);
         const mapsMs = Date.now() - tMaps;
