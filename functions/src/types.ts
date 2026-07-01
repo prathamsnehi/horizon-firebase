@@ -135,15 +135,55 @@ export interface PregeneratedBatchDocument {
 }
 
 /**
- * Represents a document in the `scout_concepts` collection. Records the raw
- * Pass 1 (Scout) output so we can inspect what location queries Gemini is
- * producing for a given profile. Inspection/debugging only.
+ * Represents a document in the `ai_call_logs` collection. Records the response
+ * of every AI call (Scout, Writer, Generic) tagged with the provider + model
+ * that served it. Inspection/debugging + raw substrate for the load dashboard.
  */
-export interface ScoutConceptsDocument {
+export interface AiCallLogDocument {
+  stage: "scout" | "writer" | "generic";
+  provider: string; // e.g. "gemini", "groq"
+  model: string; // e.g. "gemini-3.5-flash"
+  attempts: number; // how many candidates were tried before success
+  latencyMs: number; // wall-clock of the successful call
+  success: boolean;
   deviceId: string;
-  profile: UserProfile;
-  city: string;
-  count: number; // number of concepts generated
-  concepts: LocationConcept[];
+  city: string; // denormalized from profile.city for easy dashboard grouping
+  profile: UserProfile; // full input profile that produced this output (debugging)
+  response: unknown; // the parsed structured output
   createdAt: number; // Unix timestamp in milliseconds
 }
+
+// ------------------------------
+// Global rate-limiting (Firestore multi-window limiter):
+// ------------------------------
+
+export type RateWindowKind = "rpm" | "rpd" | "tpm" | "tpd" | "monthly";
+
+/**
+ * "bucket" — smoothing token bucket (good for per-minute limits).
+ * "fixed"  — fixed-window counter that resets after `windowMs` (good for hard
+ *            daily/monthly caps, which don't refill gradually).
+ */
+export type RateWindowStrategy = "bucket" | "fixed";
+
+export interface RateWindowConfig {
+  kind: RateWindowKind;
+  limit: number;
+  windowMs: number;
+  strategy: RateWindowStrategy;
+}
+
+export interface BucketWindowState {
+  tokens: number;
+  lastRefillMs: number;
+}
+
+export interface FixedWindowState {
+  count: number;
+  windowStartMs: number;
+}
+
+export type RateWindowState = BucketWindowState | FixedWindowState;
+
+/** A provider's rate state, keyed by window kind (e.g. { rpm: {...}, rpd: {...} }). */
+export type ProviderRateState = Record<string, RateWindowState>;

@@ -1,10 +1,10 @@
 import * as functions from "firebase-functions/v2";
 import { SidequestRequest, SidequestResponse, SidequestItem, SidequestTimings } from "../types";
-import { generateLocationConcepts, generateSidequestsWriter, generateGenericSidequests } from "../integrations/gemini";
+import { generateLocationConcepts, generateSidequestsWriter, generateGenericSidequests, LogContext } from "../llm";
 import { getBestLocation } from "../integrations/maps";
-import { saveScoutConcepts } from "../integrations/firestore";
+import { flushAiCallLogs } from "../integrations/firestore";
 import { calculateDistanceMiles, calculateAllTransportOptions } from "../utils/distance";
-import { geminiApiKey, placesApiKey } from "../config";
+import { geminiApiKey, placesApiKey, groqApiKey, mistralApiKey, cerebrasApiKey } from "../config";
 
 /**
  * Module-level flag for cold-start detection. Module scope is evaluated once
@@ -46,8 +46,8 @@ function validateRequest(data: any): data is SidequestRequest {
  * - `count` (number, required) — how many sidequests to generate. Sets the number of Scout
  *   concepts / parallel Maps calls, and the target the generic fallback fills up to. The web
  *   client currently requests 5.
- * - `deviceId` (string, required) — identifies the requesting device. Used for logging and
- *   for tagging the persisted Scout output; not used for rate-limiting yet.
+ * - `deviceId` (string, required) — identifies the requesting device. Used for tagging the
+ *   per-call AI logs (`ai_call_logs`); not used for rate-limiting yet.
  * - `excludeTitles` (string[], optional) — titles of recently completed sidequests to avoid
  *   repeating. Passed to both the Scout and the generic fallback. Defaults to [] when omitted.
  *
@@ -56,10 +56,10 @@ function validateRequest(data: any): data is SidequestRequest {
  * fails outright (no concepts, or no sidequests written).
  */
 export const generateSidequests = functions.https.onCall(
-    { 
+    {
         enforceAppCheck: true, // App Check, only iOS App and Website can access
-        secrets: [geminiApiKey, placesApiKey]
-    }, 
+        secrets: [geminiApiKey, placesApiKey, groqApiKey, mistralApiKey, cerebrasApiKey]
+    },
     async (request) => {
     // 1. Validation & Auth
     if (!validateRequest(request.data)) {
@@ -68,6 +68,11 @@ export const generateSidequests = functions.https.onCall(
 
     const sidequestReq = request.data as SidequestRequest;
     const { profile, count, deviceId, excludeTitles } = sidequestReq;
+
+    // Context passed to each AI task so it can log its call (provider + model +
+    // response + input profile) to Firestore. Logs are best-effort and flushed
+    // before returning.
+    const logCtx: LogContext = { deviceId, profile };
 
     // Stage timing & cold-start capture. Read/flip the warm flag before any
     // await so concurrent invocations on one container still attribute the
@@ -82,18 +87,13 @@ export const generateSidequests = functions.https.onCall(
         // --- PASS 1: SCOUT (Gemini generates abstract search queries) ---
         console.log(`[generateSidequests] Invoking Pass 1 (Scout)...`);
         const tScout = Date.now();
-        const locationConcepts = await generateLocationConcepts(profile, count, excludeTitles || []);
+        const locationConcepts = await generateLocationConcepts(profile, count, excludeTitles || [], logCtx);
         const scoutMs = Date.now() - tScout;
         console.log(`[generateSidequests] Pass 1 generated ${locationConcepts.length} concepts. (${scoutMs}ms)`);
 
         if (locationConcepts.length === 0) {
              throw new Error("Pass 1 failed to generate location concepts.");
         }
-
-        // Persist the raw Scout output for inspection. Kicked off now but
-        // awaited just before returning, so the write overlaps Maps + Writer
-        // and adds ~no latency. Best-effort — never throws.
-        const scoutPersist = saveScoutConcepts(deviceId, profile, locationConcepts);
 
         // --- STEP 2: LOCATION RESOLUTION (Maps API in parallel) ---
         console.log(`[generateSidequests] Resolving concepts via Google Maps API in parallel...`);
@@ -150,7 +150,7 @@ export const generateSidequests = functions.https.onCall(
         let writerMs = 0;
         if (enrichedLocations.length > 0) {
             const tWriter = Date.now();
-            const locationSidequests = await generateSidequestsWriter(profile, enrichedLocations);
+            const locationSidequests = await generateSidequestsWriter(profile, enrichedLocations, logCtx);
             writerMs = Date.now() - tWriter;
             finalSidequests.push(...locationSidequests);
             console.log(`[generateSidequests] Pass 2 generated ${locationSidequests.length} location-based sidequests. (${writerMs}ms)`);
@@ -162,7 +162,7 @@ export const generateSidequests = functions.https.onCall(
         if (deficit > 0) {
             console.log(`[generateSidequests] Deficit of ${deficit} sidequests. Invoking Generic Fallback...`);
             const tGeneric = Date.now();
-            const genericSidequests = await generateGenericSidequests(profile, deficit, excludeTitles || []);
+            const genericSidequests = await generateGenericSidequests(profile, deficit, excludeTitles || [], logCtx);
             genericFallbackMs = Date.now() - tGeneric;
             finalSidequests.push(...genericSidequests);
             console.log(`[generateSidequests] Fallback generated ${genericSidequests.length} generic sidequests. (${genericFallbackMs}ms)`);
@@ -173,8 +173,9 @@ export const generateSidequests = functions.https.onCall(
             throw new Error("Pass 2 failed to write any sidequests.");
         }
 
-        // Ensure the Scout-output write lands before the container can freeze.
-        await scoutPersist;
+        // Ensure best-effort AI-call logs (scout/writer/generic) land before the
+        // container can freeze.
+        await flushAiCallLogs();
 
         // --- STEP 5: RETURN ---
         const timings: SidequestTimings = {
