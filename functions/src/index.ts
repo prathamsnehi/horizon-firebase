@@ -32,4 +32,4 @@ setGlobalOptions({ maxInstances: 10 });
 
 export * from "./controllers/sidequests"; // functions for sidequests
 
-// this is a brainrot special
+// this is a brainrot special (ft. druski)

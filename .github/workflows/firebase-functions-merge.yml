@@ -36,9 +36,15 @@ jobs:
       # that SA must be granted functions-deploy roles (see repo docs) or this
       # step's deploy will fail with permission errors.
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HORIZON_SIDEQUESTS }}
 
+      # Point the Firebase CLI at the service-account key the auth step wrote.
+      # Passing the path explicitly (rather than relying on the action's global
+      # export) is what the CLI reliably reads for non-interactive auth.
       - name: Deploy functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: npx firebase-tools@14 deploy --only functions --project horizon-sidequests --non-interactive --force
