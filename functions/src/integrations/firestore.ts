@@ -27,11 +27,12 @@ function getDb(): Firestore {
 export async function saveScoutConcepts(
   deviceId: string,
   profile: UserProfile,
-  concepts: LocationConcept[]
+  concepts: LocationConcept[],
 ): Promise<void> {
   try {
     const doc: ScoutConceptsDocument = {
       deviceId,
+      profile: profile,
       city: profile.city,
       count: concepts.length,
       concepts,
