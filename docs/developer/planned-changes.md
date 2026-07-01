@@ -4,7 +4,21 @@ A living backlog of architectural changes under consideration but **not yet impl
 
 Related docs: [production-architecture.md](./production-architecture.md) (the aspirational production design), [backend-roadmap.md](./backend-roadmap.md) (build order), [api-contracts.md](../api/api-contracts.md) (the contract source of truth).
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-01_
+
+---
+
+## 0. Multi-provider LLM routing — SHIPPED (follow-ups tracked here)
+
+The provider-agnostic LLM layer (`functions/src/llm/`) is implemented: Vercel AI SDK, Zod/`generateObject`, global Firestore multi-window rate limiter with failover, per-call `ai_call_logs`. Remaining follow-ups:
+
+- **Confirm rate limits (now per-model).** [functions/src/llm/rateLimits.ts](../../functions/src/llm/rateLimits.ts) is keyed per model (`provider:model`) with safety-margined values from official docs (Groq/Gemini/Cerebras); Gemini numbers are mapped from the flash/flash-lite classes (confirm the 3.x names in the AI Studio dashboard), and Mistral RPM is unpublished/conservative. Verify each and tune.
+- **Confirm free-tier model IDs.** [functions/src/llm/models.ts](../../functions/src/llm/models.ts) candidate model IDs churn — validate they exist on each provider's current catalog, and eval quality per provider before trusting the rotation (heterogeneous models = variable output quality).
+- **Wire the load dashboard.** Enable AI SDK OpenTelemetry → Langfuse, and/or the Firestore→BigQuery→Looker Studio path on `ai_call_logs`.
+- **Precise token (TPM/TPD) accounting** — v1 models only request-count windows (rpm/rpd) and leans on `penalizeLlmProvider` for token-limit 429s.
+- **Shard the `llm_rate_buckets/global` doc** if single-doc write contention becomes a bottleneck (distributed-counter pattern).
+- **`ai_call_logs` retention/TTL + sampling** once write volume matters.
+- **Add more providers** (e.g. an OpenRouter free-model pool) if broader fallback breadth is ever needed — trivial via the AI SDK.
 
 ---
 

@@ -8,6 +8,11 @@ import {defineSecret} from "firebase-functions/params";
 export const geminiApiKey = defineSecret("GEMINI_API_KEY");
 export const placesApiKey = defineSecret("PLACES_API_KEY");
 
+// Additional LLM providers for the multi-provider routing layer (all free-tier).
+export const groqApiKey = defineSecret("GROQ_API_KEY");
+export const mistralApiKey = defineSecret("MISTRAL_API_KEY");
+export const cerebrasApiKey = defineSecret("CEREBRAS_API_KEY");
+
 // ------------------------------
 // Constants:
 // ------------------------------

@@ -18,7 +18,7 @@ describe("prompts utils", () => {
         it("should include the city and correct count in the prompt", () => {
             const prompt = buildLocationConceptsPrompt(mockProfile, 5);
             
-            expect(prompt).toContain("Generate EXACTLY 5 location search queries");
+            expect(prompt).toContain("Produce EXACTLY 5 Google Maps search queries");
             expect(prompt).toContain("City: San Francisco");
         });
 
