@@ -1,20 +1,21 @@
-import { getApps, initializeApp } from "firebase-admin/app";
+import { getApps, initializeApp, App } from "firebase-admin/app";
 import { getFirestore, Firestore } from "firebase-admin/firestore";
 import { LocationConcept, UserProfile, ScoutConceptsDocument } from "../types";
 
+/**
+ * Initialize the Admin SDK once at module load (runs at cold start, before any
+ * request). We capture the App instance and pass it explicitly to
+ * getFirestore(app) rather than relying on default-app resolution, which was
+ * throwing "default Firebase app does not exist" under firebase-admin 13.
+ * `initializeApp()` with no args uses the default service-account credentials
+ * and bypasses security rules.
+ */
+const app: App = getApps().length ? getApps()[0]! : initializeApp();
 let db: Firestore | null = null;
 
-/**
- * Lazily initialize the Admin SDK + Firestore. Admin init runs at most once
- * per container; in Cloud Functions `initializeApp()` with no args uses the
- * default service-account credentials and bypasses security rules.
- */
 function getDb(): Firestore {
-  if (!getApps().length) {
-    initializeApp();
-  }
   if (!db) {
-    db = getFirestore();
+    db = getFirestore(app);
   }
   return db;
 }
