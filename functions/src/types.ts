@@ -157,7 +157,7 @@ export interface AiCallLogDocument {
 // Global rate-limiting (Firestore multi-window limiter):
 // ------------------------------
 
-export type RateWindowKind = "rpm" | "rpd" | "tpm" | "tpd" | "monthly";
+export type RateWindowKind = "rps" | "rpm" | "rpd" | "tpm" | "tpd" | "monthly";
 
 /**
  * "bucket" — smoothing token bucket (good for per-minute limits).
