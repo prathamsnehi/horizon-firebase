@@ -7,7 +7,7 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-import {setGlobalOptions} from "firebase-functions";
+import { setGlobalOptions } from "firebase-functions";
 // import {onRequest} from "firebase-functions/v2/https";
 // import * as logger from "firebase-functions/logger";
 
@@ -23,7 +23,7 @@ import {setGlobalOptions} from "firebase-functions";
 // functions should each use functions.runWith({ maxInstances: 10 }) instead.
 // In the v1 API, each function can only serve one request per container, so
 // this will be the maximum concurrent request count.
-setGlobalOptions({maxInstances: 10});
+setGlobalOptions({ maxInstances: 10 });
 
 // export const helloWorld = onRequest((request, response) => {
 //   logger.info("Hello logs!", {structuredData: true});
@@ -32,3 +32,4 @@ setGlobalOptions({maxInstances: 10});
 
 export * from "./controllers/sidequests"; // functions for sidequests
 
+// this is a brainrot special
