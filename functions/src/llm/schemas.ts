@@ -40,6 +40,12 @@ export const writerSidequestsSchema = z.object({
   ),
 });
 
+// Pass 0 (Describe Planner): does the user's freeform prompt need a real place?
+export const describePlanSchema = z.object({
+  mode: z.enum(["location", "generic"]),
+  textQuery: z.string().optional(),
+});
+
 // Generic fallback: location-agnostic sidequests (no assignedLocationId).
 export const genericSidequestsSchema = z.object({
   sidequests: z.array(

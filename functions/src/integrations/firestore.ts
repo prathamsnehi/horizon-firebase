@@ -5,6 +5,8 @@ import {
   RateWindowConfig,
   ProviderRateState,
   RateWindowState,
+  UserSidequestStateDocument,
+  SidequestItem,
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
 
@@ -175,4 +177,92 @@ export async function penalizeRateKey(rateKey: string): Promise<void> {
   } catch (err) {
     console.error("[penalizeRateKey] failed:", err);
   }
+}
+
+// ------------------------------
+// Per-user sidequest cache + daily usage (user_sidequests/{deviceId})
+// ------------------------------
+
+const USER_SIDEQUESTS_COLLECTION = "user_sidequests";
+
+/** Current UTC date as "YYYY-MM-DD" — the daily-reset key. */
+export function dateKey(now: number = Date.now()): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+export async function getUserSidequestState(
+  deviceId: string
+): Promise<UserSidequestStateDocument | null> {
+  const snap = await getDb()
+    .collection(USER_SIDEQUESTS_COLLECTION)
+    .doc(deviceId)
+    .get();
+  return snap.exists ? (snap.data() as UserSidequestStateDocument) : null;
+}
+
+/**
+ * Persist the batch most recently served to the user, and clear the
+ * now-consumed pre-generated batch.
+ */
+export async function saveServedBatch(
+  deviceId: string,
+  batch: SidequestItem[],
+  date: string
+): Promise<void> {
+  await getDb()
+    .collection(USER_SIDEQUESTS_COLLECTION)
+    .doc(deviceId)
+    .set(
+      {
+        deviceId,
+        servedBatch: batch,
+        servedDate: date,
+        nextBatch: null,
+        nextBatchHash: null,
+        nextBatchCreatedAt: null,
+      },
+      { merge: true }
+    );
+}
+
+/** Store a background pre-generated batch ready to serve next. */
+export async function savePregeneratedBatch(
+  deviceId: string,
+  batch: SidequestItem[],
+  profileHash: string,
+  createdAt: number = Date.now()
+): Promise<void> {
+  await getDb()
+    .collection(USER_SIDEQUESTS_COLLECTION)
+    .doc(deviceId)
+    .set(
+      {
+        deviceId,
+        nextBatch: batch,
+        nextBatchHash: profileHash,
+        nextBatchCreatedAt: createdAt,
+      },
+      { merge: true }
+    );
+}
+
+/** Persist the most recently described sidequest (cache only). */
+export async function saveDescribeResult(
+  deviceId: string,
+  sidequest: SidequestItem,
+  prompt: string,
+  date: string
+): Promise<void> {
+  await getDb()
+    .collection(USER_SIDEQUESTS_COLLECTION)
+    .doc(deviceId)
+    .set(
+      {
+        deviceId,
+        describeResult: sidequest,
+        describePrompt: prompt,
+        describeDate: date,
+      },
+      { merge: true }
+    );
 }

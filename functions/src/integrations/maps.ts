@@ -40,7 +40,7 @@ function mapPlaceToLocation(place: any): LocationInformation {
   return {
     name: place.displayName?.text || "",
     address: place.formattedAddress || "",
-    description: place.editorialSummary?.text || "",
+    locationDescription: place.editorialSummary?.text || "",
     latitude: place.location?.latitude || 0,
     longitude: place.location?.longitude || 0,
     googleMapsURL: place.googleMapsUri || "",

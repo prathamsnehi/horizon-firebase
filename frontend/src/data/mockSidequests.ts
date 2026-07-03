@@ -3,7 +3,7 @@ import type { SidequestItem } from "../types";
 /**
  * Local fixtures used when VITE_USE_MOCK=true (or Firebase isn't configured).
  * Photos use picsum.photos so location cards render real images offline.
- * Shape matches the real `generateSidequests` response exactly.
+ * Shape matches the real `generateCuratedSidequests` response exactly.
  */
 export const MOCK_SIDEQUESTS: SidequestItem[] = [
   {
@@ -16,7 +16,7 @@ export const MOCK_SIDEQUESTS: SidequestItem[] = [
     locationInformation: {
       name: "Bernal Heights Park",
       address: "Bernal Heights Blvd, San Francisco, CA",
-      description:
+      locationDescription:
         "A grassy hilltop park with sweeping 360° views over the city skyline and bay.",
       latitude: 37.7434,
       longitude: -122.4159,
@@ -48,7 +48,7 @@ export const MOCK_SIDEQUESTS: SidequestItem[] = [
     locationInformation: {
       name: "City Lights Booksellers",
       address: "261 Columbus Ave, San Francisco, CA",
-      description:
+      locationDescription:
         "Historic independent bookstore and publisher, a landmark of the Beat movement.",
       latitude: 37.7976,
       longitude: -122.4065,
@@ -79,7 +79,7 @@ export const MOCK_SIDEQUESTS: SidequestItem[] = [
     locationInformation: {
       name: "Crissy Field",
       address: "1199 East Beach, San Francisco, CA",
-      description:
+      locationDescription:
         "A former airfield turned shoreline park with views of the Golden Gate Bridge.",
       latitude: 37.8042,
       longitude: -122.4654,
@@ -111,7 +111,7 @@ export const MOCK_SIDEQUESTS: SidequestItem[] = [
     locationInformation: {
       name: "The Make-Out Room",
       address: "3225 22nd St, San Francisco, CA",
-      description:
+      locationDescription:
         "A beloved Mission District music and events venue known for its eclectic lineups.",
       latitude: 37.7553,
       longitude: -122.4189,
@@ -150,7 +150,7 @@ export const MOCK_SIDEQUESTS: SidequestItem[] = [
     locationInformation: {
       name: "The Embarcadero",
       address: "The Embarcadero, San Francisco, CA",
-      description:
+      locationDescription:
         "A scenic waterfront promenade running along the eastern edge of the city.",
       latitude: 37.7993,
       longitude: -122.3972,

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { ChevronRight, History as HistoryIcon, Compass } from "lucide-react";
+import { ChevronRight, History as HistoryIcon, Sparkles } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { IdbImage } from "../../components/IdbImage";
 import { HeroVisual } from "../../components/HeroVisual";
@@ -17,16 +17,16 @@ export default function History() {
         <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/15 text-primary">
           <HistoryIcon className="h-10 w-10" />
         </div>
-        <h1 className="text-title1 font-bold tracking-tight text-foreground">
+        <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
           Your story starts here
         </h1>
         <p className="mt-3 max-w-sm text-muted-foreground">
           Completed quests live here as a journal of photos and reflections.
           Finish your first one to begin.
         </p>
-        <Link to="/app/discover" className="mt-7">
+        <Link to="/app/home" className="mt-7">
           <Button size="lg">
-            <Compass className="h-5 w-5" />
+            <Sparkles className="h-5 w-5" />
             Find a quest
           </Button>
         </Link>
@@ -36,11 +36,11 @@ export default function History() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8 sm:py-12">
-      <div className="mb-7">
-        <h1 className="text-title1 font-bold tracking-tight text-foreground">
+      <div className="mb-8">
+        <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
           History
         </h1>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1.5 text-muted-foreground">
           {completed.length} quest{completed.length === 1 ? "" : "s"} completed
         </p>
       </div>
