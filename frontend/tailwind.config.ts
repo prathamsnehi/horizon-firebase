@@ -24,16 +24,25 @@ export default {
       },
       fontFamily: {
         sans: [
+          "Inter Variable",
           "-apple-system",
           "BlinkMacSystemFont",
           "SF Pro Text",
-          "SF Pro Display",
           "system-ui",
           "Segoe UI",
           "Roboto",
           "Helvetica Neue",
           "Arial",
           "sans-serif",
+        ],
+        // Editorial display face — used for titles and hero moments.
+        display: [
+          "Fraunces Variable",
+          "ui-serif",
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "serif",
         ],
       },
       fontSize: {
@@ -47,16 +56,24 @@ export default {
         title2: ["1.375rem", { lineHeight: "1.75rem" }],
         title1: ["1.75rem", { lineHeight: "2.125rem" }],
         largetitle: ["2.25rem", { lineHeight: "2.5rem" }],
+        // Editorial display sizes (pair with font-display).
+        display: ["2.75rem", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        "display-lg": ["3.75rem", { lineHeight: "1.02", letterSpacing: "-0.025em" }],
+      },
+      letterSpacing: {
+        tightest: "-0.03em",
       },
       borderRadius: {
         xl: "1rem",
         "2xl": "1.25rem",
         "3xl": "1.75rem",
+        "4xl": "2.25rem",
       },
       boxShadow: {
-        card: "0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.06)",
-        "card-hover": "0 2px 4px rgb(0 0 0 / 0.06), 0 16px 40px rgb(0 0 0 / 0.12)",
-        float: "0 12px 48px rgb(0 0 0 / 0.18)",
+        // Softer, lighter — less card chrome.
+        card: "0 1px 2px rgb(28 27 27 / 0.03), 0 4px 16px rgb(28 27 27 / 0.04)",
+        "card-hover": "0 2px 4px rgb(28 27 27 / 0.05), 0 12px 32px rgb(28 27 27 / 0.08)",
+        float: "0 8px 40px rgb(28 27 27 / 0.14)",
       },
       keyframes: {
         "fade-in": {

@@ -41,6 +41,17 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HORIZON_SIDEQUESTS }}
 
+      # Debug: confirm the auth step actually produced a credentials file and
+      # that GOOGLE_APPLICATION_CREDENTIALS points at it. If the path prints
+      # empty or the file is missing, the auth handoff (not IAM) is the problem.
+      - name: Debug creds
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          echo "output path: '${{ steps.auth.outputs.credentials_file_path }}'"
+          echo "env var:     '$GOOGLE_APPLICATION_CREDENTIALS'"
+          ls -l "$GOOGLE_APPLICATION_CREDENTIALS" || echo "FILE MISSING/UNSET"
+
       # Point the Firebase CLI at the service-account key the auth step wrote.
       # Passing the path explicitly (rather than relying on the action's global
       # export) is what the CLI reliably reads for non-interactive auth.

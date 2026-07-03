@@ -7,6 +7,7 @@ export {
   generateLocationConcepts,
   generateSidequestsWriter,
   generateGenericSidequests,
+  planDescribedSidequest,
 } from "./tasks";
 
 export type { LogContext } from "./tasks";

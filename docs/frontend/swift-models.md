@@ -69,7 +69,7 @@ Codable struct grouping all location data. Present only on location-based quests
 LocationInformation
 ├── name: String                       — name of the place (e.g., "Dolores Park")
 ├── address: String                    — full address string
-├── description: String                — editorial summary from Google Maps
+├── locationDescription: String        — editorial summary from Google Maps (named to avoid clashing with NSObject's `description`)
 ├── latitude: Double                   — for MapKit display
 ├── longitude: Double                  — for MapKit display
 ├── photoURL: String                   — photo URL from Google Maps Places API
@@ -193,8 +193,9 @@ The onboarding is a paginated Guided UI flow — multi-step forms with selectabl
 - The app preserves the form state locally (e.g., via AppStorage or a draft model) as the user progresses through the steps.
 - If the user quits mid-onboarding, their progress is saved and they resume where they left off next time.
 - Once the user completes all steps, the final `UserProfile` is fully populated and saved in SwiftData.
-- The app then calls `generateSidequests` passing the full, structured `UserProfile` object to the backend.
-- The backend may return a pre-generated batch instantly (cache hit) or generate fresh (the app shows a "curating" loading state while waiting).
+- The app then calls `generateCuratedSidequests` passing the full, structured `UserProfile` object to the backend (the batch count is server-controlled; the client does not send a count).
+- The backend may return a pre-generated batch instantly (cache hit) or generate fresh (the app shows a "curating" loading state while waiting). No per-user rate limit is enforced on the backend during the testing phase; any usage limiting will be added client-side.
+- A separate `generateUserDescribedSidequest` endpoint takes a freeform `prompt` + `UserProfile` and returns one tailored sidequest (also no backend cap for now). The iOS client will need the same rename from the old `generateSidequests`.
 
 ## Relationships
 

@@ -12,22 +12,33 @@ functions/
 ├── tsconfig.json
 └── src/
     ├── index.ts                 # Main entrypoint: exports all Cloud Functions
-    ├── config.ts                # Environment variables, secret names, and constants
+    ├── config.ts                # Secret names + constants (CURATED_BATCH_SIZE, Cloud Tasks)
     ├── types.ts                 # TypeScript interfaces for everything
     ├── utils/
-    │   └── hash.ts              # Small utilities (e.g., profile hashing)
+    │   ├── hash.ts              # hashProfile — stable profile hash for cache invalidation
+    │   ├── distance.ts          # Haversine distance + heuristic transport times
+    │   └── prompts.ts           # Prompt builders (scout, writer, generic, describe planner)
     │
-    ├── controllers/             # Layer 1: Firebase HTTP/Callable Handlers
-    │   └── sidequests.ts
+    ├── controllers/             # Layer 1: Firebase Callable / Task Handlers
+    │   ├── sidequests.ts        # generateCuratedSidequests, generateUserDescribedSidequest
+    │   └── tasks.ts             # pregenerateCuratedBatch (onTaskDispatched)
     │
     ├── services/                # Layer 2: Core Business Logic
-    │   └── sidequestService.ts
+    │   └── sidequestService.ts  # generateBatch, generateDescribed, enrichLocations
+    │
+    ├── llm/                     # Provider-agnostic LLM layer (Vercel AI SDK)
+    │   ├── router.ts            # distribute + failover across providers
+    │   ├── models.ts            # provider registry + per-stage model classes
+    │   ├── rateLimits.ts        # per-model free-tier limits
+    │   ├── schemas.ts           # Zod structured-output schemas
+    │   └── tasks.ts             # scout / writer / generic / describe-planner calls
     │
     └── integrations/            # Layer 3: External APIs & Database
-        ├── gemini.ts            # Google AI Studio / Gemini SDK wrapper
-        ├── maps.ts              # Google Maps Places API wrapper
-        └── firestore.ts         # Firestore read/write wrappers for cache
+        ├── maps.ts              # Google Maps Places API wrapper (getBestLocation)
+        └── firestore.ts         # Cache (user_sidequests), ai_call_logs, rate buckets
 ```
+
+_Note: the old `integrations/gemini.ts` was replaced by the multi-provider `llm/` layer._
 
 ---
 
@@ -79,12 +90,14 @@ Hardcoded values and configurations go here. For example:
 - Maximum result count for the Maps API.
 - The base URL for Maps photo construction.
 
-## Example Flow: Generating Sidequests
+## Example Flow: The curated daily batch (cache-first)
 
-1. **App** calls `generateSidequests`.
-2. **Controller (`controllers/sidequests.ts`)** receives the call, validates `deviceId`, and passes the data to `sidequestService.ts`.
-3. **Service (`services/sidequestService.ts`)** calls `firestore.ts` to check for a pre-generated batch.
-4. **Integration (`firestore.ts`)** reads the cache and returns it.
-5. If valid, the **Service** returns the batch to the **Controller**, but simultaneously kicks off a background task.
-6. The background task calls `gemini.ts` to generate quests, then `maps.ts` to fetch photos, and finally `firestore.ts` to save the new cache.
-7. The **Controller** sends the instant response back to the **App**.
+1. **App** calls `generateCuratedSidequests`.
+2. **Controller (`controllers/sidequests.ts`)** validates the payload, reads `user_sidequests/{deviceId}` via `firestore.ts`, and computes the profile hash (`utils/hash.ts`).
+3. **Cache hit (served today):** returns the stored `servedBatch` immediately (idempotent, `timings.cached = true`). Done.
+4. **Cache hit (valid `nextBatch`):** serves the pre-generated batch.
+5. **Cache miss:** calls **Service (`services/sidequestService.ts`) → `generateBatch`**, which runs the two-pass pipeline via the **`llm/`** layer (scout → Maps `getBestLocation` → distance/transport enrich → writer → generic deficit-fill).
+6. The **Controller** persists the served batch, then **enqueues a Cloud Task** (`pregenerateCuratedBatch`) to build the next batch in the background, and returns the response.
+7. **`controllers/tasks.ts`** later runs the task off the request path, calling the same Service and saving `nextBatch` — so the next day is instant.
+
+The freeform `generateUserDescribedSidequest` follows a similar controller → service path, using the planner + single writer instead of a batch, and is not pre-generated.

@@ -1,0 +1,53 @@
+import { onTaskDispatched } from "firebase-functions/v2/tasks";
+import { PregenTaskPayload } from "../types";
+import { LogContext } from "../llm";
+import { generateBatch } from "../services/sidequestService";
+import { hashProfile } from "../utils/hash";
+import {
+  flushAiCallLogs,
+  savePregeneratedBatch,
+} from "../integrations/firestore";
+import {
+  geminiApiKey,
+  placesApiKey,
+  groqApiKey,
+  mistralApiKey,
+  cerebrasApiKey,
+  CURATED_BATCH_SIZE,
+} from "../config";
+
+/**
+ * Background pre-generation of the next curated batch. Enqueued by
+ * `generateCuratedSidequests` after it serves; runs off the request path so the
+ * next day's batch is ready instantly. Best-effort: a failure just means the
+ * next request falls back to synchronous generation.
+ */
+export const pregenerateCuratedBatch = onTaskDispatched(
+  {
+    secrets: [geminiApiKey, placesApiKey, groqApiKey, mistralApiKey, cerebrasApiKey],
+    retryConfig: { maxAttempts: 2 },
+    rateLimits: { maxConcurrentDispatches: 5 },
+  },
+  async (request) => {
+    const { deviceId, profile } = request.data as PregenTaskPayload;
+    if (!deviceId || !profile) {
+      console.error("[pregenerateCuratedBatch] Invalid payload; skipping.");
+      return;
+    }
+
+    const logCtx: LogContext = { deviceId, profile };
+    try {
+      const { sidequests } = await generateBatch(
+        profile,
+        CURATED_BATCH_SIZE,
+        [],
+        logCtx
+      );
+      await savePregeneratedBatch(deviceId, sidequests, hashProfile(profile));
+      await flushAiCallLogs();
+      console.log(`[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`);
+    } catch (err) {
+      console.error("[pregenerateCuratedBatch] Failed:", err);
+    }
+  }
+);

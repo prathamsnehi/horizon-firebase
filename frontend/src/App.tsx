@@ -3,7 +3,7 @@ import Landing from "./routes/Landing";
 import Onboarding from "./routes/onboarding/Onboarding";
 import AppLayout from "./routes/app/AppLayout";
 import Home from "./routes/app/Home";
-import Discover from "./routes/app/Discover";
+import Create from "./routes/app/Create";
 import Completion from "./routes/app/Completion";
 import History from "./routes/app/History";
 import CompletedDetail from "./routes/app/CompletedDetail";
@@ -20,7 +20,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/app/home" replace /> },
       { path: "home", element: <Home /> },
-      { path: "discover", element: <Discover /> },
+      { path: "create", element: <Create /> },
       { path: "history", element: <History /> },
       { path: "history/:questId", element: <CompletedDetail /> },
       { path: "settings", element: <Settings /> },

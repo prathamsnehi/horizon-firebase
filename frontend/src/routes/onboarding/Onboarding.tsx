@@ -182,7 +182,7 @@ export default function Onboarding() {
     setError(null);
     try {
       await generateBatch();
-      navigate("/app/discover", { replace: true });
+      navigate("/app/home", { replace: true });
     } catch {
       setSubmitting(false);
       setError(
@@ -270,7 +270,7 @@ export default function Onboarding() {
           {isLast ? (
             <Button size="lg" onClick={submit}>
               <Sparkles className="h-5 w-5" />
-              Generate my quests
+              Curate my sidequests
             </Button>
           ) : (
             <Button size="lg" onClick={() => go(1)} disabled={!canProceed}>
@@ -307,7 +307,7 @@ function StepBody({
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/15 text-primary">
           <Sparkles className="h-8 w-8" />
         </div>
-        <h1 className="text-largetitle font-bold tracking-tight text-foreground">
+        <h1 className="font-display text-largetitle font-semibold tracking-tight text-foreground">
           Let's build your Horizon
         </h1>
         <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
@@ -418,7 +418,8 @@ function StepBody({
         className="w-full resize-none rounded-2xl border border-border bg-surface px-5 py-4 text-callout text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
       />
       <p className="mt-3 text-footnote text-muted-foreground">
-        You're all set — tap “Generate my quests” to get your first deck of ten.
+        You're all set — tap “Curate my sidequests” to get your first three,
+        hand-picked for you.
       </p>
     </div>
   );
@@ -433,7 +434,7 @@ function StepHeading({
 }) {
   return (
     <div className="mb-7">
-      <h1 className="text-title1 font-bold tracking-tight text-foreground">
+      <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
         {title}
       </h1>
       <p className="mt-2 text-muted-foreground">{subtitle}</p>
