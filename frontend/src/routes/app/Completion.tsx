@@ -125,7 +125,7 @@ export default function Completion() {
         >
           {step === 0 && (
             <section>
-              <h1 className="text-title1 font-bold tracking-tight text-foreground">
+              <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
                 Capture the moment
               </h1>
               <p className="mt-2 text-muted-foreground">
@@ -174,7 +174,7 @@ export default function Completion() {
 
           {step === 1 && (
             <section>
-              <h1 className="text-title1 font-bold tracking-tight text-foreground">
+              <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
                 How was it?
               </h1>
               <p className="mt-2 text-muted-foreground">
@@ -194,7 +194,7 @@ export default function Completion() {
 
           {step === 2 && (
             <section>
-              <h1 className="text-title1 font-bold tracking-tight text-foreground">
+              <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
                 Looking good
               </h1>
               <p className="mt-2 text-muted-foreground">

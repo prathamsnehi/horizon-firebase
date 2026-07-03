@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./App";
 import { initTheme } from "./lib/theme";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/fraunces";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 

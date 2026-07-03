@@ -1,6 +1,6 @@
 /**
  * Types mirrored from the Cloud Functions backend (functions/src/types.ts)
- * plus web-only view models. The web client talks to `generateSidequests`
+ * plus web-only view models. The web client talks to `generateCuratedSidequests`
  * and must match the ACTUAL function contract, not the older API docs.
  */
 
@@ -33,11 +33,22 @@ export interface UserProfile {
 
 // ---- Request / response shapes (match controllers/sidequests.ts) ----
 
-export interface SidequestRequest {
+/** generateCuratedSidequests request — count is server-controlled. */
+export interface CuratedSidequestRequest {
   profile: UserProfile;
-  count: number;
-  excludeTitles: string[];
   deviceId: string;
+  excludeTitles?: string[];
+}
+
+/** generateUserDescribedSidequest request. */
+export interface DescribedSidequestRequest {
+  prompt: string;
+  profile: UserProfile;
+  deviceId: string;
+}
+
+export interface DescribedSidequestResponse {
+  sidequest: SidequestItem | null;
 }
 
 export interface TransportationOption {
@@ -49,7 +60,7 @@ export interface TransportationOption {
 export interface LocationInformation {
   name: string;
   address: string;
-  description: string;
+  locationDescription: string;
   latitude: number;
   longitude: number;
   photoURL: string;
@@ -75,6 +86,7 @@ export interface SidequestTimings {
   genericFallbackMs: number;
   totalServerMs: number;
   coldStart: boolean;
+  cached?: boolean;
 }
 
 export interface SidequestResponse {
@@ -92,6 +104,8 @@ export interface Quest extends SidequestItem {
   createdAt: number;
   batchId: string;
   status: SidequestStatus;
+  /** How this quest entered the app: a curated batch or the user's own prompt. */
+  source: "curated" | "described";
   /** Stable placeholder image index for non-location quests. */
   placeholderIndex: number;
   // Get Started guide (mocked client-side, cached after first generation)

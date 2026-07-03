@@ -14,9 +14,11 @@ Currently, the generation pipeline is monolithic: if one component fails, the en
 
 LLM APIs and Google Maps APIs are expensive and heavily rate-limited. We cannot afford a 1:1 ratio of user swipes to API invocations at scale.
 
-- **Global Quest Caching (The Cost Killer):** Sidequests don't always need to be 100% unique per user. If two users in "San Francisco" both have a "chill" vibe and like "coffee", they can receive the exact same generated sidequest. We can hash the `(City + Vibe + Interests)` and store the resulting sidequests in a global Firestore pool. When a user requests sidequests, we query the global pool first. If a match exists, we serve it (Cost: $0.00). If not, we generate it, serve it, and _add it to the pool_.
-- **Multi-Model Router (Fallback Strategy):** We should implement an `LLMProvider` interface. The primary driver can be `Gemini-3.5-Flash` (cheap, fast). If it hits a rate limit (HTTP 429) or fails, the code automatically catches the error and retries the exact same prompt against `Claude 3 Haiku` (AWS/Anthropic) or `GPT-4o-mini` (OpenAI). This ensures uptime even during provider outages.
-- **Asynchronous Generation (Cloud Tasks / PubSub):** A Two-Pass LLM system + Maps API will take 5-15 seconds. On a 3G mobile connection, an HTTPS Callable function will often timeout. Instead of making the user stare at a spinner, the app should call `requestBatch`. The backend drops a message into **Google Cloud Tasks** and immediately returns `status: processing`. The backend generates the quests in the background and saves them to Firestore. The iOS app just listens to the Firestore collection for new documents.
+> **Implementation status:** Per-user caching + background pre-generation, the multi-provider router, and rate limiting are **shipped** (see [planned-changes.md](./planned-changes.md) §0/§0b). The remaining unbuilt item is the **global (cross-user) pool** described in the first bullet.
+
+- **Global Quest Caching (The Cost Killer):** _Partially shipped._ Per-user pre-generation is live (`pregenerateCuratedBatch` via Cloud Tasks stores each user's next batch in `user_sidequests/{deviceId}`). The **cross-user global pool** — hash `(City + Vibe + Interests)` → serve a shared batch across users for a $0 hit — is still to be built.
+- **Multi-Model Router (Fallback Strategy):** _Shipped_ as the `llm/` layer (Vercel AI SDK). Primary is Gemini; on 429/error it distributes + fails over across **Groq, Mistral, Cerebras** (all free-tier). Note: Claude/OpenAI have no free API tier, so they were intentionally excluded. Distribution is global + rate-aware via a Firestore multi-window limiter.
+- **Asynchronous Generation (Cloud Tasks):** _Shipped for pre-generation._ We don't return `status: processing`; instead `generateCuratedSidequests` serves the pre-generated batch synchronously (instant on a cache hit) and uses **Cloud Tasks** only to build the *next* batch in the background. A miss generates synchronously (a few seconds).
 
 ## 3. Advanced Production Considerations (Staff Engineer Level)
 
@@ -24,7 +26,7 @@ When designing this for millions of users, we must answer these questions:
 
 ### A. Idempotency (The Double-Tap Problem)
 
-What happens if the iOS app sends a `generateSidequests` request, but the user goes into a tunnel and loses connection? The app will automatically retry the request. If we aren't careful, the backend will receive _two_ requests and run the expensive LLM pipeline _twice_.
+What happens if the iOS app sends a `generateCuratedSidequests` request, but the user goes into a tunnel and loses connection? The app will automatically retry the request. If we aren't careful, the backend could run the expensive LLM pipeline _twice_. (Partly mitigated today: the per-day, idempotent re-serve in `user_sidequests/{deviceId}` means a same-day retry returns the stored batch rather than regenerating. A dedicated `requestId` guard is still the robust general solution.)
 **Solution:** The iOS app must generate a unique `requestId` (UUID) and send it with the payload. The backend checks Redis or Firestore: "Have I seen this requestId in the last 5 minutes?" If yes, ignore the duplicate.
 
 ### B. Toxicity, Safety, and Physical Danger

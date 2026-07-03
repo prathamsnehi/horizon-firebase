@@ -54,17 +54,21 @@ ${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate location concepts sim
 
 /**
  * Builds the prompt for Pass 2 (Writer) to generate final sidequests.
+ *
+ * `userIntent` (optional) is the user's freeform "describe a sidequest" request;
+ * when present, the sidequest should fulfill it using the provided location(s).
  */
 export function buildSidequestWriterPrompt(
   profile: UserProfile,
   mapsResults: any[],
+  userIntent?: string,
 ): string {
   return `Write the final sidequests based on the real locations provided.
 
 USER PROFILE:
 Interests: ${profile.interests.join(",")}
 Growth Areas: ${profile.growthAreas.join(",")}
-
+${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe sidequest MUST directly fulfill this request using the location(s) below.\n` : ""}
 LOCATIONS:
 ${JSON.stringify(mapsResults, null, 2)}
 
@@ -77,6 +81,24 @@ RULES:
 }
 
 /**
+ * Builds the Pass-0 (Describe Planner) prompt: decide whether the user's
+ * freeform request needs a specific real-world place or can be an at-home /
+ * online / abstract activity.
+ */
+export function buildDescribePlannerPrompt(
+  userPrompt: string,
+  profile: UserProfile,
+): string {
+  return `A user described a sidequest they want. Decide how to fulfill it.
+
+USER REQUEST: "${userPrompt}"
+City: ${profile.city}
+
+If fulfilling it requires going to a specific real-world place, set mode="location" and provide a Google Maps "textQuery" (a specific, findable place type that includes the city/region).
+If it can be done at home, online, or anywhere (no specific venue needed), set mode="generic" and omit textQuery.`;
+}
+
+/**
  * Builds the prompt for generating generic, at-home, or location-agnostic sidequests.
  * This is used as a graceful fallback when Maps API fails to resolve locations.
  */
@@ -84,6 +106,7 @@ export function buildGenericSidequestWriterPrompt(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
+  userIntent?: string,
 ): string {
   return `Write exactly ${count} generic, at-home, or location-agnostic sidequests.
 
@@ -92,7 +115,7 @@ Interests: ${profile.interests.join(",")}
 Growth Areas: ${profile.growthAreas.join(",")}
 Vibe: ${profile.vibe.join(",")}
 Context: ${profile.additionalContext || "None"}
-
+${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe sidequest(s) MUST directly fulfill this request.\n` : ""}
 RULES:
 1. Generate exactly ${count} sidequests.
 2. These quests can involve exploring or traveling, but they MUST be generic (e.g., "find a local cafe", "take a walk in a nearby park") because they will not be tied to a specific Google Maps location. They can also be at-home or online activities.

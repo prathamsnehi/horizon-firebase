@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Sparkles, Save } from "lucide-react";
+import { Check, Sparkles, Save, FlaskConical } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Pill } from "../../components/ui/Pill";
 import { useAppStore } from "../../store/useAppStore";
@@ -130,20 +130,20 @@ export default function Settings() {
 
   const saveAndGenerate = () => {
     updateProfile(normalize(form));
-    // Fire-and-forget; Discover renders the curating state via `generating`.
+    // Fire-and-forget; Home renders the curating state via `generating`.
     generateBatch().catch(() => {});
-    navigate("/app/discover");
+    navigate("/app/home");
   };
 
   return (
     <Shell>
-      <div className="mb-7">
-        <h1 className="text-title1 font-bold tracking-tight text-foreground">
+      <div className="mb-8">
+        <h1 className="font-display text-title1 font-semibold tracking-tight text-foreground">
           Preferences
         </h1>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1.5 text-muted-foreground">
           Tune your profile without retaking onboarding. Changes apply to your
-          next batch of quests.
+          next set of sidequests.
         </p>
       </div>
 
@@ -223,10 +223,18 @@ export default function Settings() {
             className="w-full resize-none rounded-2xl border border-border bg-surface px-5 py-4 text-callout text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
           />
         </Section>
+
+        <button
+          onClick={() => navigate("/app/dev")}
+          className="inline-flex items-center gap-2 text-footnote font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <FlaskConical className="h-3.5 w-3.5" />
+          Developer tools
+        </button>
       </div>
 
       {/* Sticky save bar */}
-      <div className="fixed inset-x-0 bottom-16 z-40 border-t border-border bg-surface/95 backdrop-blur md:bottom-0 md:left-64">
+      <div className="fixed inset-x-0 bottom-16 z-40 border-t border-border bg-surface/95 backdrop-blur md:bottom-0 md:left-60">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-6 py-4">
           <span className="text-footnote text-muted-foreground">
             {saved && !dirty

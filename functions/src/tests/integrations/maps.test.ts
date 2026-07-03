@@ -41,7 +41,7 @@ describe("Maps Integration", () => {
     expect(result).not.toBeNull();
     expect(result?.name).toBe("Jay Cooke State Park");
     expect(result?.address).toBe("780 E Hwy 210, Carlton, MN");
-    expect(result?.description).toBe("Beautiful park");
+    expect(result?.locationDescription).toBe("Beautiful park");
     expect(result?.latitude).toBe(46.6);
     expect(result?.longitude).toBe(-92.3);
     expect(result?.googleMapsURL).toBe("https://maps.google.com/?cid=123");
@@ -69,7 +69,7 @@ describe("Maps Integration", () => {
     const result = await getTopLocation("Obscure park");
 
     expect(result).not.toBeNull();
-    expect(result?.description).toBe(""); // Should default to empty string
+    expect(result?.locationDescription).toBe(""); // Should default to empty string
     expect(result?.photoURL).toBe(""); // Should default to empty string
   });
 

@@ -3,9 +3,8 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   Compass,
-  MapPin,
   Sparkles,
-  Shuffle,
+  PenLine,
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "../components/ui/Button";
@@ -58,13 +57,13 @@ export default function Landing() {
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               AI-crafted quests for the real world
             </span>
-            <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
+            <h1 className="mx-auto max-w-3xl font-display text-display font-semibold leading-[1.03] tracking-tight text-foreground sm:text-display-lg">
               Step past the edge of your{" "}
               <span className="text-primary">comfort zone</span>.
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
-              Horizon turns who you are into a deck of real-world sidequests —
-              personal, place-aware, and made to be lived, not scrolled.
+              Horizon turns who you are into real-world sidequests — personal,
+              place-aware, and made to be lived, not scrolled.
             </p>
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to={ctaHref}>
@@ -94,13 +93,13 @@ export default function Landing() {
             {PREVIEW.map((p) => (
               <div
                 key={p.title}
-                className="rounded-3xl border border-border bg-surface p-5 text-left shadow-card"
+                className="rounded-4xl border border-border bg-surface p-5 text-left shadow-card"
               >
                 <div
-                  className="mb-4 h-28 w-full rounded-2xl"
+                  className="mb-4 h-28 w-full rounded-3xl"
                   style={{ backgroundImage: p.gradient }}
                 />
-                <p className="text-headline font-semibold text-foreground">
+                <p className="font-display text-headline font-semibold text-foreground">
                   {p.title}
                 </p>
                 <p className="mt-1 text-footnote text-muted-foreground">
@@ -112,12 +111,42 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how" className="border-t border-border/60 bg-surface/40 py-20">
+      {/* Two ways in */}
+      <section className="border-t border-border/60 bg-surface/40 py-20">
         <div className="mx-auto max-w-6xl px-6">
           <motion.h2
             {...fade}
-            className="text-center text-3xl font-bold tracking-tight text-foreground"
+            className="text-center font-display text-title1 font-semibold tracking-tight text-foreground sm:text-largetitle"
+          >
+            Two ways to find your next thing
+          </motion.h2>
+          <div className="mt-12 grid gap-6 md:grid-cols-2">
+            {MODES.map((m, i) => (
+              <motion.div
+                key={m.title}
+                {...fade}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="rounded-4xl border border-border bg-surface p-8"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                  <m.icon className="h-6 w-6" strokeWidth={1.75} />
+                </div>
+                <h3 className="mt-5 font-display text-title3 font-semibold text-foreground">
+                  {m.title}
+                </h3>
+                <p className="mt-2 text-muted-foreground">{m.body}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how" className="py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <motion.h2
+            {...fade}
+            className="text-center font-display text-title1 font-semibold tracking-tight text-foreground sm:text-largetitle"
           >
             Three steps to your next story
           </motion.h2>
@@ -127,57 +156,32 @@ export default function Landing() {
                 key={s.title}
                 {...fade}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="rounded-3xl border border-border bg-surface p-7"
+                className="rounded-4xl border border-border bg-surface p-7"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                  <s.icon className="h-6 w-6" />
+                  <s.icon className="h-6 w-6" strokeWidth={1.75} />
                 </div>
                 <p className="mt-5 text-footnote font-semibold uppercase tracking-wide text-muted-foreground">
                   Step {i + 1}
                 </p>
-                <h3 className="mt-1 text-title3 font-semibold text-foreground">
+                <h3 className="mt-1 font-display text-title3 font-semibold text-foreground">
                   {s.title}
                 </h3>
                 <p className="mt-2 text-muted-foreground">{s.body}</p>
               </motion.div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            {FEATURES.map((f) => (
-              <motion.div
-                key={f.title}
-                {...fade}
-                className="flex gap-4 rounded-3xl border border-border bg-surface p-7"
-              >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                  <f.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-headline font-semibold text-foreground">
-                    {f.title}
-                  </h3>
-                  <p className="mt-1 text-muted-foreground">{f.body}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
 
           <motion.div
             {...fade}
-            className="mt-14 overflow-hidden rounded-3xl border border-border bg-foreground px-8 py-14 text-center"
+            className="mt-16 overflow-hidden rounded-4xl border border-border bg-foreground px-8 py-14 text-center"
           >
-            <h2 className="text-3xl font-bold tracking-tight text-background">
+            <h2 className="font-display text-largetitle font-semibold tracking-tight text-background">
               Your horizon is waiting.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-background/70">
-              Build your profile in under two minutes and get your first ten
-              quests.
+              Build your profile in under two minutes and get your first three
+              sidequests.
             </p>
             <Link to={ctaHref} className="mt-8 inline-block">
               <Button size="lg">
@@ -219,6 +223,19 @@ const PREVIEW = [
   },
 ];
 
+const MODES = [
+  {
+    icon: Sparkles,
+    title: "Get three, curated for you",
+    body: "Tell us who you are once. Every day, our two-pass AI scouts real places near you and hands you three sidequests worth your time — no endless feed to sift through.",
+  },
+  {
+    icon: PenLine,
+    title: "Or describe your own",
+    body: "In the mood for something specific? Describe it in a sentence and we'll shape it into a real, doable quest — tied to a place near you when it makes sense.",
+  },
+];
+
 const STEPS = [
   {
     icon: Compass,
@@ -227,35 +244,12 @@ const STEPS = [
   },
   {
     icon: Sparkles,
-    title: "Get a curated deck",
-    body: "Our two-pass AI scouts real places near you and writes ten quests tailored to exactly who you are.",
+    title: "Get your picks",
+    body: "Three tailored sidequests, place-aware and personal — or describe your own idea and we'll craft it on the spot.",
   },
   {
     icon: CheckCircle2,
     title: "Live it, log it",
-    body: "Swipe to choose, head out, and capture the moment with photos and a reflection you keep forever.",
-  },
-];
-
-const FEATURES = [
-  {
-    icon: MapPin,
-    title: "Place-aware, not generic",
-    body: "Location quests are tied to real spots near you with distance and travel-time estimates baked in.",
-  },
-  {
-    icon: Shuffle,
-    title: "A spontaneity dial",
-    body: "Set how wild you want it. Crank it up and Horizon throws in wildcards beyond your usual lane.",
-  },
-  {
-    icon: Sparkles,
-    title: "Always something to do",
-    body: "Every batch is ten quests with a balanced spread of difficulty, time, and type — swipe until one clicks.",
-  },
-  {
-    icon: CheckCircle2,
-    title: "A journal of your growth",
-    body: "Completed quests become a private history of photos and reflections, all stored on your device.",
+    body: "Choose one, head out, and capture the moment with photos and a reflection you keep forever.",
   },
 ];

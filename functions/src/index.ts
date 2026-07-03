@@ -30,6 +30,7 @@ setGlobalOptions({ maxInstances: 10 });
 //   response.send("Hello from Firebase!");
 // });
 
-export * from "./controllers/sidequests"; // functions for sidequests
+export * from "./controllers/sidequests"; // callables: generateCuratedSidequests, generateUserDescribedSidequest
+export * from "./controllers/tasks"; // onTaskDispatched: pregenerateCuratedBatch
 
 // this is a brainrot special (ft. druski)

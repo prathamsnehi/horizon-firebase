@@ -3,17 +3,20 @@ import {
   LocationConcept,
   SidequestItem,
   LocationInformation,
+  DescribePlan,
 } from "../types";
 import {
   buildLocationConceptsPrompt,
   buildSidequestWriterPrompt,
   buildGenericSidequestWriterPrompt,
+  buildDescribePlannerPrompt,
 } from "../utils/prompts";
 import { generateObjectWithRouting } from "./router";
 import {
   locationConceptsSchema,
   writerSidequestsSchema,
   genericSidequestsSchema,
+  describePlanSchema,
 } from "./schemas";
 import { saveAiCallLog } from "../integrations/firestore";
 import { RoutingResult } from "./types";
@@ -77,7 +80,8 @@ export async function generateLocationConcepts(
 export async function generateSidequestsWriter(
   profile: UserProfile,
   locations: LocationInformation[],
-  ctx?: LogContext
+  ctx?: LogContext,
+  userIntent?: string
 ): Promise<SidequestItem[]> {
   // Inject IDs to guarantee we map the exact untouched Maps data back later.
   const locationsWithIds = locations.map((loc, index) => ({
@@ -85,7 +89,7 @@ export async function generateSidequestsWriter(
     ...loc,
   }));
 
-  const prompt = buildSidequestWriterPrompt(profile, locationsWithIds);
+  const prompt = buildSidequestWriterPrompt(profile, locationsWithIds, userIntent);
   const result = await generateObjectWithRouting("writer", {
     schema: writerSidequestsSchema,
     prompt,
@@ -135,11 +139,17 @@ export async function generateGenericSidequests(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
-  ctx?: LogContext
+  ctx?: LogContext,
+  userIntent?: string
 ): Promise<SidequestItem[]> {
   if (count <= 0) return [];
 
-  const prompt = buildGenericSidequestWriterPrompt(profile, count, excludeTitles);
+  const prompt = buildGenericSidequestWriterPrompt(
+    profile,
+    count,
+    excludeTitles,
+    userIntent
+  );
   const result = await generateObjectWithRouting("generic", {
     schema: genericSidequestsSchema,
     prompt,
@@ -157,4 +167,23 @@ export async function generateGenericSidequests(
 
   logCall("generic", result, rawSidequests, ctx);
   return finalSidequests;
+}
+
+/**
+ * Pass 0 (Describe Planner): decide whether a user's freeform describe request
+ * needs a specific real-world place (location) or is location-agnostic (generic).
+ * Uses the fast "scout" model class. Logged under the "scout" stage.
+ */
+export async function planDescribedSidequest(
+  prompt: string,
+  profile: UserProfile,
+  ctx?: LogContext
+): Promise<DescribePlan> {
+  const plannerPrompt = buildDescribePlannerPrompt(prompt, profile);
+  const result = await generateObjectWithRouting("scout", {
+    schema: describePlanSchema,
+    prompt: plannerPrompt,
+  });
+  logCall("scout", result, result.object, ctx);
+  return result.object;
 }

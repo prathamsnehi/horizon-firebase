@@ -30,14 +30,43 @@ export interface UserProfile {
 }
 
 // -------------------------
-// generateSidequests types:
+// generateCuratedSidequests types:
 // -------------------------
 
-export interface SidequestRequest {
+/**
+ * Request for the curated daily batch. Count is server-controlled
+ * (CURATED_BATCH_SIZE), so the client does not send it.
+ */
+export interface CuratedSidequestRequest {
   profile: UserProfile;
-  count: number;
-  excludeTitles: string[];
   deviceId: string;
+  excludeTitles?: string[];
+}
+
+// -------------------------
+// generateUserDescribedSidequest types:
+// -------------------------
+
+/**
+ * Request for a single, freeform user-described sidequest.
+ */
+export interface DescribedSidequestRequest {
+  prompt: string;
+  profile: UserProfile;
+  deviceId: string;
+}
+
+export interface DescribedSidequestResponse {
+  sidequest: SidequestItem | null;
+}
+
+/**
+ * Pass-0 (Planner) output for the describe flow: decide whether the user's
+ * prompt implies a real place (location) or an at-home / abstract quest (generic).
+ */
+export interface DescribePlan {
+  mode: "location" | "generic";
+  textQuery?: string; // Google Maps query when mode === "location"
 }
 
 export interface TransportationOption {
@@ -49,7 +78,7 @@ export interface TransportationOption {
 export interface LocationInformation {
   name: string;
   address: string;
-  description: string;
+  locationDescription: string;
   latitude: number;
   longitude: number;
   photoURL: string;
@@ -81,6 +110,7 @@ export interface SidequestTimings {
   genericFallbackMs: number; // Deficit-filling generic generation (0 if skipped)
   totalServerMs: number; // Whole handler, validation → response
   coldStart: boolean; // True if this invocation booted a fresh container
+  cached?: boolean; // True when served from cache (no generation happened)
 }
 
 export interface SidequestResponse {
@@ -125,13 +155,39 @@ export interface LocationConceptsResponse {
 // ------------------------------
 
 /**
- * Represents a document in the `pregenerated_batches/{deviceId}` collection.
+ * Represents a document in the `user_sidequests/{deviceId}` collection — the
+ * per-user cache state for both the curated batch and the described sidequest.
+ *
+ * `served*` fields record what the user got most recently. `next*` fields hold
+ * the background-pre-generated batch ready to serve next, validated by profile
+ * hash + TTL. `describe*` mirrors this for the freeform describe flow.
+ *
+ * NOTE: no per-user daily cap is currently enforced (testing phase); these
+ * fields are used for caching only. The `*Date` fields are retained so a daily
+ * cap can be re-enabled later without a schema change.
  */
+export interface UserSidequestStateDocument {
+  deviceId: string;
 
-export interface PregeneratedBatchDocument {
-  profileHash: string; // based on user's current preferences. pregen batch invalidates if user preferences change
-  sidequests: SidequestItem[];
-  createdAt: number; // Unix timestamp in milliseconds for easy TTL/expiration checks
+  // Curated daily batch
+  servedBatch?: SidequestItem[];
+  servedDate?: string; // "YYYY-MM-DD" — last day a curated batch was served
+  nextBatch?: SidequestItem[];
+  nextBatchHash?: string; // profileHash of nextBatch
+  nextBatchCreatedAt?: number; // Unix ms, for TTL validation
+
+  // Described daily sidequest
+  describeResult?: SidequestItem;
+  describeDate?: string; // "YYYY-MM-DD" — last day a described quest was served
+  describePrompt?: string; // the prompt that produced describeResult (idempotency key)
+}
+
+/**
+ * Payload enqueued to the Cloud Task that pre-generates the next curated batch.
+ */
+export interface PregenTaskPayload {
+  deviceId: string;
+  profile: UserProfile;
 }
 
 /**

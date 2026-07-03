@@ -13,7 +13,7 @@ export interface GenLogEntry {
   id: string;
   /** Epoch ms when the request fired. */
   startedAt: number;
-  /** Wall-clock duration of the generateSidequests call, in ms. */
+  /** Wall-clock duration of the generateCuratedSidequests call, in ms. */
   durationMs: number;
   requestedCount: number;
   returnedCount: number;

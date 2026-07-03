@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { generateSidequests, ApiError, isMockMode } from "../lib/api";
+import {
+  generateCuratedSidequests,
+  CURATED_BATCH_SIZE,
+  ApiError,
+  isMockMode,
+} from "../lib/api";
 import { useGenLog } from "../lib/genLog";
 import { placeholderIndexFor } from "../data/placeholders";
 import type {
@@ -16,13 +21,19 @@ function uuid() {
     : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-function toQuest(item: SidequestItem, batchId: string): Quest {
+function toQuest(
+  item: SidequestItem,
+  batchId: string,
+  source: Quest["source"],
+  status: Quest["status"] = "available"
+): Quest {
   return {
     ...item,
     id: uuid(),
     createdAt: Date.now(),
     batchId,
-    status: "available",
+    status,
+    source,
     placeholderIndex: placeholderIndexFor(item.title),
     photoIds: [],
   };
@@ -52,10 +63,11 @@ interface AppState {
   generateBatch: () => Promise<void>;
   clearError: () => void;
 
-  // Deck actions
-  skipQuest: (id: string) => void;
+  // Quest selection (adaptive Home commits to one active quest)
   acceptQuest: (id: string) => void;
   swapActive: () => void;
+  /** Add a user-described sidequest and make it the active quest. */
+  acceptDescribed: (item: SidequestItem) => string;
 
   // Quest detail
   setGetStartedSteps: (id: string, steps: string[]) => void;
@@ -94,11 +106,12 @@ export const useAppStore = create<AppState>()(
 
       clearError: () => set({ error: null }),
 
+      // Fetch a fresh curated trio. Keeps the active quest and history;
+      // replaces the previously available (unchosen) curated set.
       generateBatch: async () => {
         const { profile, quests } = get();
         if (!profile) throw new Error("No profile to generate from.");
         set({ generating: true, error: null });
-        const requestedCount = 5;
         const startedAt = Date.now();
         const t0 = performance.now();
         const mode = isMockMode() ? "mock" : "live";
@@ -106,17 +119,16 @@ export const useAppStore = create<AppState>()(
           const completedTitles = quests
             .filter((q) => q.status === "completed")
             .map((q) => q.title);
-          const { items, timings } = await generateSidequests(
+          const { items, timings } = await generateCuratedSidequests(
             profile,
-            requestedCount,
             completedTitles
           );
           const batchId = uuid();
-          // Regenerating clears remaining available/skipped; keep active + history.
+          // Regenerating clears the old available curated set; keep active + history.
           const kept = quests.filter(
             (q) => q.status === "active" || q.status === "completed"
           );
-          const fresh = items.map((it) => toQuest(it, batchId));
+          const fresh = items.map((it) => toQuest(it, batchId, "curated"));
           set({
             quests: [...kept, ...fresh],
             currentBatchId: batchId,
@@ -125,7 +137,7 @@ export const useAppStore = create<AppState>()(
           useGenLog.getState().addEntry({
             startedAt,
             durationMs: Math.round(performance.now() - t0),
-            requestedCount,
+            requestedCount: CURATED_BATCH_SIZE,
             returnedCount: items.length,
             status: "success",
             mode,
@@ -141,7 +153,7 @@ export const useAppStore = create<AppState>()(
           useGenLog.getState().addEntry({
             startedAt,
             durationMs: Math.round(performance.now() - t0),
-            requestedCount,
+            requestedCount: CURATED_BATCH_SIZE,
             returnedCount: 0,
             status: "error",
             mode,
@@ -152,15 +164,8 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      skipQuest: (id) =>
-        set((s) => ({
-          quests: s.quests.map((q) =>
-            q.id === id && q.status === "available"
-              ? { ...q, status: "skipped" }
-              : q
-          ),
-        })),
-
+      // Commit to a curated quest: it becomes active; any prior active
+      // quest returns to the available pool.
       acceptQuest: (id) =>
         set((s) => ({
           quests: s.quests.map((q) => {
@@ -176,6 +181,18 @@ export const useAppStore = create<AppState>()(
             q.status === "active" ? { ...q, status: "available" } : q
           ),
         })),
+
+      acceptDescribed: (item) => {
+        const id = uuid();
+        set((s) => {
+          const demoted = s.quests.map((q) =>
+            q.status === "active" ? { ...q, status: "available" as const } : q
+          );
+          const fresh = { ...toQuest(item, "described", "described", "active"), id };
+          return { quests: [...demoted, fresh] };
+        });
+        return id;
+      },
 
       setGetStartedSteps: (id, steps) =>
         set((s) => ({
@@ -226,14 +243,11 @@ export const useAppStore = create<AppState>()(
 export const selectActiveQuest = (s: AppState) =>
   s.quests.find((q) => q.status === "active");
 
-export const selectDeck = (s: AppState) =>
-  s.quests.filter((q) => q.status === "available" || q.status === "skipped");
-
-export const selectAvailable = (s: AppState) =>
-  s.quests.filter((q) => q.status === "available");
-
-export const selectSkipped = (s: AppState) =>
-  s.quests.filter((q) => q.status === "skipped");
+/** The current curated trio the user can choose from (not yet committed). */
+export const selectCurated = (s: AppState) =>
+  s.quests
+    .filter((q) => q.status === "available")
+    .sort((a, b) => a.createdAt - b.createdAt);
 
 export const selectCompleted = (s: AppState) =>
   s.quests
