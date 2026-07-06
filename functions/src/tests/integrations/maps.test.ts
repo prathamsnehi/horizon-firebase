@@ -22,7 +22,6 @@ describe("Maps Integration", () => {
         {
           displayName: {text: "Jay Cooke State Park"},
           formattedAddress: "780 E Hwy 210, Carlton, MN",
-          editorialSummary: {text: "Beautiful park"},
           location: {latitude: 46.6, longitude: -92.3},
           googleMapsUri: "https://maps.google.com/?cid=123",
           photos: [{name: "places/123/photos/456"}],
@@ -41,7 +40,7 @@ describe("Maps Integration", () => {
     expect(result).not.toBeNull();
     expect(result?.name).toBe("Jay Cooke State Park");
     expect(result?.address).toBe("780 E Hwy 210, Carlton, MN");
-    expect(result?.locationDescription).toBe("Beautiful park");
+    expect(result?.locationDescription).toBe(""); // Maps no longer supplies a summary; the Writer LLM fills it
     expect(result?.latitude).toBe(46.6);
     expect(result?.longitude).toBe(-92.3);
     expect(result?.googleMapsURL).toBe("https://maps.google.com/?cid=123");
@@ -103,9 +102,8 @@ describe("Maps Integration", () => {
     expect(["Place A", "Place B", "Place C"]).toContain(result?.name);
   });
 
-  describe("getBestLocation", () => {
-    // Force the "pick among top pool" randomness to a deterministic index so we
-    // can assert on ranking. 0 -> the top-ranked candidate.
+  describe("getBestLocation (middle-ground selection over relevance order)", () => {
+    // Force the "pick within the top window" randomness to a deterministic index.
     function mockRandom(value: number) {
       return jest.spyOn(Math, "random").mockReturnValue(value);
     }
@@ -121,84 +119,80 @@ describe("Maps Integration", () => {
       });
     }
 
-    it("ranks by rating weighted by review volume and returns the strongest place", async () => {
-      mockRandom(0); // pick the #1 ranked candidate
-      mockPlaces([
-        // High rating but almost no reviews — should NOT win.
-        {displayName: {text: "New Trap Cafe"}, rating: 4.9, userRatingCount: 3},
-        // Slightly lower rating but a huge, trustworthy review base — should win.
-        {displayName: {text: "Beloved Institution"}, rating: 4.6, userRatingCount: 2000},
-        {displayName: {text: "Mediocre Spot"}, rating: 3.8, userRatingCount: 500},
-      ]);
+    function openPlace(text: string) {
+      return {displayName: {text}, businessStatus: "OPERATIONAL"};
+    }
 
-      const result = await getBestLocation("cafes");
+    it("only picks from the top 5 of Google's relevance order, never below", async () => {
+      // 7 open results already in relevance order; the window is the first 5.
+      mockPlaces(["P1", "P2", "P3", "P4", "P5", "P6", "P7"].map(openPlace));
 
-      expect(result?.name).toBe("Beloved Institution");
-    });
-
-    it("excludes permanently and temporarily closed places even if top-rated", async () => {
-      mockRandom(0);
-      mockPlaces([
-        {displayName: {text: "Great But Gone"}, rating: 4.8, userRatingCount: 5000, businessStatus: "CLOSED_PERMANENTLY"},
-        {displayName: {text: "On Vacation"}, rating: 4.7, userRatingCount: 4000, businessStatus: "CLOSED_TEMPORARILY"},
-        {displayName: {text: "Open For Business"}, rating: 4.5, userRatingCount: 1000, businessStatus: "OPERATIONAL"},
-      ]);
-
-      const result = await getBestLocation("bakeries");
-
-      expect(result?.name).toBe("Open For Business");
-    });
-
-    it("only ever returns a place from the top pool, never a low-ranked one", async () => {
-      // Five places with strictly descending quality scores. Top pool is 3, so
-      // P4/P5 must never surface regardless of the random draw.
-      mockPlaces([
-        {displayName: {text: "P1"}, rating: 4.9, userRatingCount: 5000},
-        {displayName: {text: "P2"}, rating: 4.7, userRatingCount: 4000},
-        {displayName: {text: "P3"}, rating: 4.5, userRatingCount: 3000},
-        {displayName: {text: "P4"}, rating: 4.2, userRatingCount: 100},
-        {displayName: {text: "P5"}, rating: 3.9, userRatingCount: 50},
-      ]);
-
-      // Sweep the random draw across the whole [0,1) range.
       for (const r of [0, 0.34, 0.66, 0.99]) {
         mockRandom(r);
-        const result = await getBestLocation("parks");
-        expect(["P1", "P2", "P3"]).toContain(result?.name);
-        expect(["P4", "P5"]).not.toContain(result?.name);
+        const result = await getBestLocation("cafes");
+        expect(["P1", "P2", "P3", "P4", "P5"]).toContain(result?.name);
+        expect(["P6", "P7"]).not.toContain(result?.name);
         jest.restoreAllMocks();
       }
     });
 
-    it("treats missing rating/review fields as lowest quality", async () => {
+    it("randomizes within the window (random draw maps to index)", async () => {
+      mockPlaces(["P1", "P2", "P3", "P4", "P5"].map(openPlace));
+
       mockRandom(0);
+      expect((await getBestLocation("x"))?.name).toBe("P1"); // index 0
+      jest.restoreAllMocks();
+
+      mockRandom(0.99);
+      expect((await getBestLocation("x"))?.name).toBe("P5"); // floor(0.99*5) = 4
+    });
+
+    it("drops closed places before forming the window", async () => {
+      // The two highest-relevance results are closed, so the window starts at P3.
       mockPlaces([
-        {displayName: {text: "Unrated"}}, // no rating/count -> score 0
-        {displayName: {text: "Rated"}, rating: 4.0, userRatingCount: 200},
+        {displayName: {text: "P1"}, businessStatus: "CLOSED_PERMANENTLY"},
+        {displayName: {text: "P2"}, businessStatus: "CLOSED_TEMPORARILY"},
+        openPlace("P3"), openPlace("P4"), openPlace("P5"),
+        openPlace("P6"), openPlace("P7"), openPlace("P8"),
       ]);
 
-      const result = await getBestLocation("shops");
+      mockRandom(0);
+      expect((await getBestLocation("x"))?.name).toBe("P3"); // first open
+      jest.restoreAllMocks();
 
-      expect(result?.name).toBe("Rated");
+      // Window is the open P3..P7; closed P1/P2 and below-window P8 never appear.
+      for (const r of [0, 0.5, 0.99]) {
+        mockRandom(r);
+        const result = await getBestLocation("x");
+        expect(["P3", "P4", "P5", "P6", "P7"]).toContain(result?.name);
+        expect(["P1", "P2", "P8"]).not.toContain(result?.name);
+        jest.restoreAllMocks();
+      }
+    });
+
+    it("randomizes across all open results when fewer than the window size", async () => {
+      mockPlaces([openPlace("A"), openPlace("B")]);
+
+      mockRandom(0);
+      expect((await getBestLocation("x"))?.name).toBe("A");
+      jest.restoreAllMocks();
+      mockRandom(0.99);
+      expect((await getBestLocation("x"))?.name).toBe("B");
     });
 
     it("returns null when every candidate is closed", async () => {
       mockPlaces([
-        {displayName: {text: "Closed A"}, rating: 4.8, userRatingCount: 900, businessStatus: "CLOSED_PERMANENTLY"},
-        {displayName: {text: "Closed B"}, rating: 4.6, userRatingCount: 700, businessStatus: "CLOSED_TEMPORARILY"},
+        {displayName: {text: "Closed A"}, businessStatus: "CLOSED_PERMANENTLY"},
+        {displayName: {text: "Closed B"}, businessStatus: "CLOSED_TEMPORARILY"},
       ]);
 
-      const result = await getBestLocation("nightclubs");
-
-      expect(result).toBeNull();
+      expect(await getBestLocation("nightclubs")).toBeNull();
     });
 
     it("returns null when the pool is empty", async () => {
       mockPlaces([]);
 
-      const result = await getBestLocation("nonexistent place");
-
-      expect(result).toBeNull();
+      expect(await getBestLocation("nonexistent place")).toBeNull();
     });
   });
 });

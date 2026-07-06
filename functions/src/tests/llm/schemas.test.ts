@@ -32,6 +32,7 @@ describe("writerSidequestsSchema", () => {
         categories: ["food"],
         assignedLocationId: "loc_0",
         recommendedTransportationMode: "walking",
+        locationDescription: "A cozy neighborhood spot.",
       },
     ],
   };

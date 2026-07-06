@@ -35,7 +35,7 @@ function logCall(
   stage: "scout" | "writer" | "generic",
   result: RoutingResult<unknown>,
   response: unknown,
-  ctx?: LogContext
+  ctx?: LogContext,
 ): void {
   if (!ctx) return;
   saveAiCallLog({
@@ -60,7 +60,7 @@ export async function generateLocationConcepts(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
-  ctx?: LogContext
+  ctx?: LogContext,
 ): Promise<LocationConcept[]> {
   const prompt = buildLocationConceptsPrompt(profile, count, excludeTitles);
   const result = await generateObjectWithRouting("scout", {
@@ -81,7 +81,7 @@ export async function generateSidequestsWriter(
   profile: UserProfile,
   locations: LocationInformation[],
   ctx?: LogContext,
-  userIntent?: string
+  userIntent?: string,
 ): Promise<SidequestItem[]> {
   // Inject IDs to guarantee we map the exact untouched Maps data back later.
   const locationsWithIds = locations.map((loc, index) => ({
@@ -89,7 +89,11 @@ export async function generateSidequestsWriter(
     ...loc,
   }));
 
-  const prompt = buildSidequestWriterPrompt(profile, locationsWithIds, userIntent);
+  const prompt = buildSidequestWriterPrompt(
+    profile,
+    locationsWithIds,
+    userIntent,
+  );
   const result = await generateObjectWithRouting("writer", {
     schema: writerSidequestsSchema,
     prompt,
@@ -98,7 +102,7 @@ export async function generateSidequestsWriter(
 
   const finalSidequests: SidequestItem[] = rawSidequests.map((sq) => {
     const originalLocation = locationsWithIds.find(
-      (l) => l.id === sq.assignedLocationId
+      (l) => l.id === sq.assignedLocationId,
     );
 
     let locationInfo: LocationInformation | undefined = undefined;
@@ -106,6 +110,9 @@ export async function generateSidequestsWriter(
       const { id, ...rest } = originalLocation;
       void id;
       locationInfo = rest as LocationInformation;
+
+      // The model writes the short location summary (Maps no longer supplies one)
+      locationInfo.locationDescription = sq.locationDescription ?? "";
 
       // Apply the recommended mode to the transportationOptions array.
       if (locationInfo.transportationOptions) {
@@ -140,7 +147,7 @@ export async function generateGenericSidequests(
   count: number,
   excludeTitles: string[] = [],
   ctx?: LogContext,
-  userIntent?: string
+  userIntent?: string,
 ): Promise<SidequestItem[]> {
   if (count <= 0) return [];
 
@@ -148,7 +155,7 @@ export async function generateGenericSidequests(
     profile,
     count,
     excludeTitles,
-    userIntent
+    userIntent,
   );
   const result = await generateObjectWithRouting("generic", {
     schema: genericSidequestsSchema,
@@ -177,7 +184,7 @@ export async function generateGenericSidequests(
 export async function planDescribedSidequest(
   prompt: string,
   profile: UserProfile,
-  ctx?: LogContext
+  ctx?: LogContext,
 ): Promise<DescribePlan> {
   const plannerPrompt = buildDescribePlannerPrompt(prompt, profile);
   const result = await generateObjectWithRouting("scout", {

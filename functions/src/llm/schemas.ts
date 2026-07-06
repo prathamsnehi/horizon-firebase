@@ -36,6 +36,9 @@ export const writerSidequestsSchema = z.object({
       categories: z.array(z.string()),
       assignedLocationId: z.string(),
       recommendedTransportationMode: transportModeEnum,
+      // A very short (1-2 sentence) summary of the place itself, written by the
+      // model — replaces the Atmosphere-tier Google editorial summary.
+      locationDescription: z.string(),
     })
   ),
 });
