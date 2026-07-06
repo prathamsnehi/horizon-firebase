@@ -95,7 +95,7 @@ _Validation: the backend requires profile (object) and deviceId (string). A miss
 - `distanceMiles` and `transportationOptions` are only present when the request included `cityLatitude`/`cityLongitude`. Exactly one option has `isRecommended: true`, chosen by the Writer model.
 - `timings` is optional, additive server-side latency telemetry (per-stage milliseconds, a cold-start flag, and `cached: true` when the batch was served from cache). Clients that don't need it can safely ignore it.
 
-_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photos or no editorial description), that field safely defaults to an empty string "" (or 0 for coordinates)._
+_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photo), that field safely defaults to an empty string "" (or 0 for coordinates)._
 
 ### 2. `generateUserDescribedSidequest`
 
@@ -189,8 +189,8 @@ Mobile App                    Cloud Function                     External APIs
     │                              ├── Promise.all() fetch 3 ────────→ Google Maps
     │                              │   locations in parallel          Places API (New)
     │                              │                                  │
-    │                              │ ←── 3 rich location objects      │
-    │                              │     (address, summary, etc)      │
+    │                              │ ←── 3 location objects           │
+    │                              │     (name, address, photo, etc)  │
     │                              │                                  │
     │                              ├── Pass 2: profile + 3 locations→ LLM router
     │                              │                                  (Gemini/Groq/…)
@@ -207,9 +207,9 @@ Mobile App                    Cloud Function                     External APIs
 ### What the Cloud Function does:
 
 1. **Pass 1 (Scout):** Sends the user's profile to the **LLM router** (fast model class; Gemini `gemini-3.1-flash-lite` with minimal thinking is primary) using structured JSON output to generate the batch's high-level location concepts/queries, each tagged with an `intendedDifficulty` that maps to geographic scale.
-2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** `places:searchText` in parallel using `Promise.all()` to fetch rich details for those concepts (address, coordinates, editorial summary, photo references, maps URI). From each query's result pool the function picks a **quality-ranked** place — scored by rating × review volume, then chosen at random among the top few (closed places excluded) — so results are strong but not identical across users. Queries that return nothing are dropped (partial success — the batch continues with whatever resolved).
+2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** `places:searchText` in parallel using `Promise.all()` to fetch details for those concepts (name, address, coordinates, photo references, maps URI). Selection is **middle-ground**: `searchText` already returns results in relevance/prominence order, so the function drops closed places and picks at random among the **top few** of that order — popular/mainstream, but varied across users (not always the identical #1, and never obscure bottom-of-list spots). Queries that return nothing are dropped (partial success — the batch continues with whatever resolved). _Only Pro-tier fields are requested (no `rating`/`userRatingCount`/`editorialSummary`), keeping calls on the cheaper Text Search Pro SKU._
 3. **Distance & transport math (local):** For each resolved location, if the request supplied `cityLatitude`/`cityLongitude`, the function computes a Haversine `distanceMiles` and heuristic per-mode `transportationOptions`. No external call.
-4. **Pass 2 (Writer):** Sends the profile AND the enriched Maps locations back to the **LLM router** (quality model class; Gemini `gemini-3.5-flash` primary) with structured JSON to write highly-tailored sidequests. The model only selects an `assignedLocationId` and a `recommendedTransportationMode`; the backend re-attaches the exact, untouched Maps data by ID afterward so the LLM cannot corrupt real addresses/coordinates/URLs.
+4. **Pass 2 (Writer):** Sends the profile AND the enriched Maps locations back to the **LLM router** (quality model class; Gemini `gemini-3.5-flash` primary) with structured JSON to write highly-tailored sidequests. The model selects an `assignedLocationId` and a `recommendedTransportationMode`, and writes a short (1–2 sentence) `locationDescription` for the place; the backend re-attaches the exact, untouched Maps data by ID afterward so the LLM cannot corrupt real addresses/coordinates/URLs. (The location summary comes from the LLM — not from Maps, whose editorial-summary field is a premium tier.)
 5. **Generic fallback (deficit filling):** If fewer locations resolved than the batch size, the shortfall is filled with location-agnostic quests via a separate router call. These come back **without** `locationInformation`.
 6. The Places API returns a **photo resource identifier** (`name` field) for each photo — not a URL or raw image data. Example: `"places/ChIJN1t.../photos/AUacShh3Z..."`
 7. Cloud Function constructs a **media URL** from the resource identifier: `https://places.googleapis.com/v1/{photo_name}/media?key=API_KEY&maxHeightPx=600` and returns it as `photoURL` — the app fetches and caches the image directly from Google.

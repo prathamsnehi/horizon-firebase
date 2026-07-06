@@ -77,7 +77,8 @@ RULES:
 2. Calculate final difficulty holistically: factor in both physical distance (miles) AND psychological stretch (growth areas).
 3. 'estimatedActivityMinutes' must reflect the activity time in minutes. Do NOT include travel time in 'estimatedActivityMinutes'.
 4. For each sidequest, provide the 'assignedLocationId' of the location you are writing the sidequest for.
-5. Provide the 'recommendedTransportationMode' (must be one of the modes available in that location's transportationOptions).`;
+5. Provide the 'recommendedTransportationMode' (must be one of the modes available in that location's transportationOptions).
+6. Write a 'locationDescription': a vivid but VERY short summary of the place itself (what it is and why it's worth visiting), based on its name and address. Maximum 1-2 sentences. Describe the PLACE, not the quest.`;
 }
 
 /**

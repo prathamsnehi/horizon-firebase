@@ -41,7 +41,7 @@ The per-user cache-first flow and describe mode are in place; these remain.
 
 Scout queries repeat heavily across users — "specialty coffee roasters in Saint Paul" is identical for everyone in that city — yet every request re-pays for the Places API call.
 
-**Plan:** Before calling Places in [getBestLocation](../../functions/src/integrations/maps.ts), check a Firestore `places_cache` collection keyed by normalized `queryText`. On hit, reuse the stored raw place pool; on miss, fetch and store. Place data is stable, so a **30–90 day TTL** is fine. The random top-3 pick in `getBestLocation` still yields per-user variety from cached data, so quality/variety don't regress.
+**Plan:** Before calling Places in [getBestLocation](../../functions/src/integrations/maps.ts), check a Firestore `places_cache` collection keyed by normalized `queryText`. On hit, reuse the stored raw place pool; on miss, fetch and store. Place data is stable, so a **30–90 day TTL** is fine. The random top-5 pick in `getBestLocation` still yields per-user variety from cached data, so quality/variety don't regress. (Considered a semantic/vector cache — rejected: embeddings under-weight the city, risking wrong-city results; only viable with city-partitioning.)
 
 **Impact:** At scale, collapses repeated queries to a single paid call, then serves free for weeks. A good stepping stone toward #4.
 
@@ -56,14 +56,13 @@ Hash `city + vibe + interests` → serve a *shared* batch across users. A cache 
 
 ---
 
-## 5. Shed a Places API SKU tier (cost — minor)
+## 5. Shed a Places API SKU tier (cost) — DONE
 
-**Status:** Idea / low priority
-**Effort:** Trivial
+Was: Enterprise + Atmosphere (top SKU), driven by `editorialSummary` (Atmosphere) plus `rating`/`userRatingCount` (Enterprise). Now dropped to **Text Search Pro** (~5,000 free calls/month vs ~1,000; ~$0.032 vs ~$0.04 per call) by:
+- **Removing `editorialSummary`** — the short location summary is now written by the Writer LLM (free, quest-tailored) instead of bought from Maps. See [tasks.ts](../../functions/src/llm/tasks.ts) / [prompts.ts](../../functions/src/utils/prompts.ts).
+- **Removing `rating`/`userRatingCount`** — `getBestLocation` now selects a middle-ground place from the top few of Google's default relevance order (which already reflects popularity), instead of an explicit rating × review-volume score.
 
-The `searchText` FieldMask requests `places.editorialSummary`, an **Atmosphere-tier** field that pins every call to the top **Enterprise + Atmosphere** SKU. Dropping it falls to **Enterprise** (~12% cheaper per call). Tradeoff: lose the location `description`. Only worth it if `description` proves not to earn its keep.
-
-_Note: fetching 10 candidates costs the same as fetching 1 — Text Search bills per call, not per result — so the quality-ranking in `getBestLocation` adds no cost._
+_Note: fetching 10 candidates costs the same as fetching 1 — Text Search bills per call, not per result._
 
 ---
 
@@ -80,8 +79,8 @@ Deferred because it requires a frontend/onboarding change — the current push i
 
 ## Cost reference (as of 2026-06-30)
 
-- Places API (New) Text Search bills **per call**, at the highest SKU tier any requested field touches. Current tier: **Enterprise + Atmosphere (~$40 / 1,000 calls = ~$0.04/call)**, driven by `editorialSummary`.
-- One batch of Maps calls ≈ **$0.04 per place**.
+- Places API (New) Text Search bills **per call**, at the highest SKU tier any requested field touches. Current tier: **Pro (~$32 / 1,000 calls = ~$0.032/call, ~5,000 free/month)** — see #5 for how it was reduced from Enterprise + Atmosphere.
+- One batch of Maps calls ≈ **$0.032 per place**.
 - Google Maps Platform has a **recurring monthly free tier** that comfortably covers development/low volume — verify exact caps in Console → Billing.
 - **During development, stub Maps** with a fixture to avoid burning quota while iterating on prompts.
 </content>

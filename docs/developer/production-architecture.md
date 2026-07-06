@@ -26,7 +26,7 @@ When designing this for millions of users, we must answer these questions:
 
 ### A. Idempotency (The Double-Tap Problem)
 
-What happens if the iOS app sends a `generateCuratedSidequests` request, but the user goes into a tunnel and loses connection? The app will automatically retry the request. If we aren't careful, the backend could run the expensive LLM pipeline _twice_. (Partly mitigated today: the per-day, idempotent re-serve in `user_sidequests/{deviceId}` means a same-day retry returns the stored batch rather than regenerating. A dedicated `requestId` guard is still the robust general solution.)
+What happens if the iOS app sends a `generateCuratedSidequests` request, but the user goes into a tunnel and loses connection? The app will automatically retry the request. If we aren't careful, the backend could run the expensive LLM pipeline _twice_. (Currently unmitigated: the per-day idempotent re-serve that used to absorb same-day retries was removed along with the daily caps during the testing phase, so a retry regenerates. A dedicated `requestId` guard is the robust general solution to add before launch.)
 **Solution:** The iOS app must generate a unique `requestId` (UUID) and send it with the payload. The backend checks Redis or Firestore: "Have I seen this requestId in the last 5 minutes?" If yes, ignore the duplicate.
 
 ### B. Toxicity, Safety, and Physical Danger

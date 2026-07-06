@@ -44,7 +44,7 @@ This is the most complex endpoint (`generateSidequests`), combining Gemini, Maps
 
 1. **Build the Orchestrator (Two-Pass Architecture):** Write a private function that executes the full orchestration:
    - **Pass 1 (Scout):** Call the Gemini helper to generate 10 location concepts or search queries based on the user profile.
-   - **Location Fetch:** Use `Promise.all()` to call your Maps helper in _parallel_ for these 10 concepts, fetching rich location details (address, editorial summary, reviews).
+   - **Location Fetch:** Use `Promise.all()` to call your Maps helper in _parallel_ for the concepts, fetching Pro-tier location details (name, address, coordinates, photo). The place summary is written later by the Writer LLM, not fetched from Maps.
    - **Pass 2 (Writer):** Feed the rich location objects back to Gemini to generate the final, highly-tailored sidequests.
    - Merge the Maps `photoURL` and coordinates back into the final quest objects.
 2. **Implement Profile Hashing:** Write a small utility function to generate a stable string hash from the user's `UserProfile` (interests, growthAreas, vibe, experimentationLevel, budget, transportation, locationPreferences, additionalContext, city).
