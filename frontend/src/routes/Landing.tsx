@@ -96,8 +96,8 @@ export default function Landing() {
                 className="rounded-4xl border border-border bg-surface p-5 text-left shadow-card"
               >
                 <div
-                  className="mb-4 h-28 w-full rounded-3xl"
-                  style={{ backgroundImage: p.gradient }}
+                  className="mb-4 h-36 w-full rounded-2xl bg-cover bg-center"
+                  style={{ backgroundImage: `url(${p.image})` }}
                 />
                 <p className="font-display text-headline font-semibold text-foreground">
                   {p.title}
@@ -209,17 +209,17 @@ const PREVIEW = [
   {
     title: "Sunrise at the overlook",
     meta: "Moderate · 90 min · 2.4 mi away",
-    gradient: "linear-gradient(135deg, #FFB693 0%, #F0966E 100%)",
+    image: "/sunrise_overlook.png",
   },
   {
     title: "Order in another language",
     meta: "Easy · 30 min · Anywhere",
-    gradient: "linear-gradient(135deg, #E8A87C 0%, #85586F 100%)",
+    image: "/cafe_order.png",
   },
   {
     title: "Open mic, front row",
     meta: "Hard · 2 hr · 2.0 mi away",
-    gradient: "linear-gradient(135deg, #F2A65A 0%, #C44E4E 100%)",
+    image: "/open_mic.png",
   },
 ];
 
