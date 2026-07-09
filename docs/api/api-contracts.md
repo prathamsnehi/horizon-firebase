@@ -8,7 +8,7 @@ All endpoints are called via Firebase's `callable` Cloud Functions SDK (not raw 
 
 ---
 
-### 1. `generateCuratedSidequests`
+### 1. `generateCuratedQuests`
 
 The user's **curated batch**. Cache-first: serves a pre-generated batch from Firestore instantly when available, else generates on the spot. The batch size is **server-controlled** (3); the client does not send a count. _No per-user rate limit is enforced on the backend right now (testing phase) — repeat calls serve a valid pre-generated batch or generate a new one. Usage limiting, if needed, will be enforced client-side._
 
@@ -36,21 +36,21 @@ The user's **curated batch**. Cache-first: serves a pre-generated batch from Fir
 }
 ```
 
-`excludeTitles` (optional) contains titles of recently completed sidequests to avoid duplicates. `deviceId` identifies the device (and keys the per-user cache).
+`excludeTitles` (optional) contains titles of recently completed quests to avoid duplicates. `deviceId` identifies the device (and keys the per-user cache).
 
 `cityLatitude`/`cityLongitude` are optional. When both are present, the backend computes straight-line distance and per-mode travel-time estimates for each resolved location; when absent, distance is omitted and transportation options fall back to `0`-minute placeholders.
 
-_Validation: the backend requires profile (object) and deviceId (string). A missing or malformed field returns an invalid-argument error._
+_Validation: the backend requires `profile` (object) and `deviceId` (string). A missing or malformed field returns an `invalid-argument` error._
 
 **Caching & pre-generation:** On serve, the backend persists today's batch and enqueues a **Cloud Task** to pre-generate the next batch, so subsequent days are instant. A stored batch is invalidated when the profile changes (its hash no longer matches) or after a TTL (7 days).
 
-**App Behavior:** The app calls this and waits. A cache hit is instant; a miss (first time, or profile changed) takes a few seconds — show a "curating" state past \~2s. The response's `timings.cached` is `true` when served from cache.
+**App Behavior:** The app calls this and waits. A cache hit is instant; a miss (first time, or profile changed) takes a few seconds — show a "curating" state past ~2s. The response's `timings.cached` is `true` when served from cache.
 
 **Response:**
 
 ```json
 {
-    "sidequests": [
+    "quests": [
         {
             "title": "string",
             "questDescription": "string",
@@ -90,23 +90,27 @@ _Validation: the backend requires profile (object) and deviceId (string). A miss
 
 **Field notes:**
 
-- `estimatedActivityMinutes` is an integer count of minutes for the activity itself and **excludes** travel time.
-- `locationInformation` is omitted for generic (no-location) sidequests — these are produced as a fallback when Maps cannot resolve enough real locations. The client should treat its absence as "at-home / location-agnostic."
-- `distanceMiles` and `transportationOptions` are only present when the request included `cityLatitude`/`cityLongitude`. Exactly one option has `isRecommended: true`, chosen by the Writer model.
+- `estimatedActivityMinutes` is an integer count of minutes for the activity itself and **excludes** travel time. (Maps directly to `Quest.estimatedActivityMinutes`.)
+- `locationInformation` is omitted for generic (no-location) quests — these are produced as a fallback when Maps cannot resolve enough real locations. The client should treat its absence as "at-home / location-agnostic."
+- `distanceMiles` and `transportationOptions` are only meaningful when the request included `cityLatitude`/`cityLongitude`. Exactly one option has `isRecommended: true`, chosen by the Writer model. Without city coords, `distanceMiles` is omitted and `transportationOptions` come back as `0`-minute placeholders.
 - `timings` is optional, additive server-side latency telemetry (per-stage milliseconds, a cold-start flag, and `cached: true` when the batch was served from cache). Clients that don't need it can safely ignore it.
 
-_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photo), that field safely defaults to an empty string "" (or 0 for coordinates)._
+_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photos or no editorial description), that field safely defaults to an empty string `""` (or `0` for coordinates)._
 
-### 2. `generateUserDescribedSidequest`
+---
 
-Generate **one** sidequest tailored to a freeform user prompt. The backend first plans whether the request needs a real place (→ Maps + location writer) or is location-agnostic (→ generic writer), falling back to generic if Maps can't resolve. _No per-user rate limit is enforced on the backend right now (testing phase)._
+### 2. `generateUserDescribedQuest`
+
+Generate **one** quest tailored to a freeform user prompt. The backend first plans whether the request needs a real place (→ Maps + location writer) or is location-agnostic (→ generic writer), falling back to generic if Maps can't resolve. _No per-user rate limit is enforced on the backend right now (testing phase)._
+
+**Used by:** The "Describe your own" daily action on the Explore tab.
 
 **Request:**
 
 ```json
 {
   "prompt": "string (the user's freeform description)",
-  "profile": { "...": "a full UserProfile (see generateCuratedSidequests)" },
+  "profile": { "...": "a full UserProfile (see generateCuratedQuests)" },
   "deviceId": "string"
 }
 ```
@@ -115,7 +119,7 @@ Generate **one** sidequest tailored to a freeform user prompt. The backend first
 
 ```json
 {
-  "sidequest": {
+  "quest": {
     "title": "string",
     "questDescription": "string",
     "difficulty": "easy" | "moderate" | "hard" | "extreme",
@@ -126,26 +130,30 @@ Generate **one** sidequest tailored to a freeform user prompt. The backend first
 }
 ```
 
-**Rate limiting:** None on the backend for now (testing phase); any usage limiting will be enforced client-side. Freeform prompts still pass a lightweight moderation check; blocked prompts return `invalid-argument`.
+Note the response is a **single `quest` object** (not an array). The client sets `origin = .described` and stores the user's `prompt` in `userPrompt`.
 
-### 3. `generateGetStartedGuide` -> NOT YET IMPLEMENTED
+**Rate limiting:** None on the backend for now (testing phase); any usage limiting is enforced client-side. Freeform prompts still pass a lightweight moderation check; blocked prompts return `invalid-argument`.
 
-Generate a step-by-step guide for approaching a specific sidequest. Called on demand when the user taps "Get Started."
+---
 
-**Request:** _(shapes defined in types.ts as GetStartedRequest; the handler is not yet wired up)_
+### 3. `generateGetStartedGuide` — ⚠️ NOT YET IMPLEMENTED
+
+Generate a step-by-step guide for approaching a specific quest. Called on demand when the user taps "Get Started." The request/response shapes are defined in the backend's `types.ts` (`GetStartedRequest` / `GetStartedResponse`), but the handler is **not yet wired up** — do not depend on this endpoint until the backend confirms it is live.
+
+**Request:**
 
 ```json
 {
-  "sidequest": {
-    "...": "a full SidequestItem (see the generateCuratedSidequests response)"
+  "quest": {
+    "...": "a full QuestItem (see the generateCuratedQuests response)"
   },
   "profile": {
-    "...": "a full UserProfile (see the generateCuratedSidequests request)"
+    "...": "a full UserProfile (see the generateCuratedQuests request)"
   }
 }
 ```
 
-**Response:** _(GetStartedResponse)_
+**Response:**
 
 ```json
 {
@@ -162,17 +170,19 @@ Errors are surfaced as Firebase `HttpsError`, so the client receives a standard 
 - `invalid-argument` — the payload failed validation (missing/malformed fields), or a described prompt was blocked by moderation.
 - `internal` — generation failed downstream (e.g., the Scout pass produced no concepts, or the Writer produced nothing). Show a retry button.
 
-_App Check is enforced (enforceAppCheck: true). Requests without a valid App Check token are rejected by Firebase before the handler runs._
+_App Check is enforced (`enforceAppCheck: true`). Requests without a valid App Check token are rejected by Firebase before the handler runs._
+
+The client should also handle transport-level failures (no network) as its own offline state, independent of these server codes.
 
 ## Rate Limiting
 
-**No backend rate limiting is enforced during the current testing phase.** Both `generateCuratedSidequests` and `generateUserDescribedSidequest` can be called freely; each call generates (or, for curated, may serve a valid pre-generated batch from cache). If per-user usage limiting is needed later, it will be enforced **client-side**, not here.
+**No backend rate limiting is enforced during the current testing phase.** Both `generateCuratedQuests` and `generateUserDescribedQuest` can be called freely; each call generates (or, for curated, may serve a valid pre-generated batch from cache). If per-user usage limiting is needed later, it will be enforced **client-side** (via `UserProfile.lastCuratedGenerationDate` / `lastDescribedGenerationDate` — see `02-data-models.md`), not here.
 
 _Note: this is unrelated to the multi-provider LLM router, which still applies its own free-tier-aware distribution across providers (see "Multi-provider LLM routing") to avoid provider 429s. That is infrastructure, not a user-facing rate limit._
 
-## Backend Orchestration — Gemini + Google Maps
+## Backend Orchestration — LLM Router + Google Maps
 
-The Cloud Functions use a multi-step orchestration pattern to generate location-aware sidequests:
+The Cloud Functions use a multi-step orchestration pattern to generate location-aware quests:
 
 ### Flow (Two-Pass Architecture)
 
@@ -189,17 +199,17 @@ Mobile App                    Cloud Function                     External APIs
     │                              ├── Promise.all() fetch 3 ────────→ Google Maps
     │                              │   locations in parallel          Places API (New)
     │                              │                                  │
-    │                              │ ←── 3 location objects           │
-    │                              │     (name, address, photo, etc)  │
+    │                              │ ←── 3 rich location objects      │
+    │                              │     (address, summary, etc)      │
     │                              │                                  │
     │                              ├── Pass 2: profile + 3 locations→ LLM router
     │                              │                                  (Gemini/Groq/…)
-    │                              │ ←── 3 tailored sidequests        │
+    │                              │ ←── 3 tailored quests        │
     │                              │                                  │
     │                              ├── construct media URL from       │
     │                              │   resource identifier + API key  │
     │                              │                                  │
-    │ ←── { sidequests[] } ────── │                                  │
+    │ ←── { quests[] } ────── │                                  │
     │  (locationInformation.photoURL│                                  │
     │      = constructed media URL) │                                  │
 ```
@@ -207,9 +217,9 @@ Mobile App                    Cloud Function                     External APIs
 ### What the Cloud Function does:
 
 1. **Pass 1 (Scout):** Sends the user's profile to the **LLM router** (fast model class; Gemini `gemini-3.1-flash-lite` with minimal thinking is primary) using structured JSON output to generate the batch's high-level location concepts/queries, each tagged with an `intendedDifficulty` that maps to geographic scale.
-2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** `places:searchText` in parallel using `Promise.all()` to fetch details for those concepts (name, address, coordinates, photo references, maps URI). Selection is **middle-ground**: `searchText` already returns results in relevance/prominence order, so the function drops closed places and picks at random among the **top few** of that order — popular/mainstream, but varied across users (not always the identical #1, and never obscure bottom-of-list spots). Queries that return nothing are dropped (partial success — the batch continues with whatever resolved). _Only Pro-tier fields are requested (no `rating`/`userRatingCount`/`editorialSummary`), keeping calls on the cheaper Text Search Pro SKU._
+2. **Location Fetch:** Cloud Function calls **Google Maps Places API (New)** `places:searchText` in parallel using `Promise.all()` to fetch rich details for those concepts (address, coordinates, editorial summary, photo references, maps URI). From each query's result pool the function picks a **quality-ranked** place — scored by rating × review volume, then chosen at random among the top few (closed places excluded) — so results are strong but not identical across users. Queries that return nothing are dropped (partial success — the batch continues with whatever resolved).
 3. **Distance & transport math (local):** For each resolved location, if the request supplied `cityLatitude`/`cityLongitude`, the function computes a Haversine `distanceMiles` and heuristic per-mode `transportationOptions`. No external call.
-4. **Pass 2 (Writer):** Sends the profile AND the enriched Maps locations back to the **LLM router** (quality model class; Gemini `gemini-3.5-flash` primary) with structured JSON to write highly-tailored sidequests. The model selects an `assignedLocationId` and a `recommendedTransportationMode`, and writes a short (1–2 sentence) `locationDescription` for the place; the backend re-attaches the exact, untouched Maps data by ID afterward so the LLM cannot corrupt real addresses/coordinates/URLs. (The location summary comes from the LLM — not from Maps, whose editorial-summary field is a premium tier.)
+4. **Pass 2 (Writer):** Sends the profile AND the enriched Maps locations back to the **LLM router** (quality model class; Gemini `gemini-3.5-flash` primary) with structured JSON to write highly-tailored quests. The model only selects an `assignedLocationId` and a `recommendedTransportationMode`; the backend re-attaches the exact, untouched Maps data by ID afterward so the LLM cannot corrupt real addresses/coordinates/URLs.
 5. **Generic fallback (deficit filling):** If fewer locations resolved than the batch size, the shortfall is filled with location-agnostic quests via a separate router call. These come back **without** `locationInformation`.
 6. The Places API returns a **photo resource identifier** (`name` field) for each photo — not a URL or raw image data. Example: `"places/ChIJN1t.../photos/AUacShh3Z..."`
 7. Cloud Function constructs a **media URL** from the resource identifier: `https://places.googleapis.com/v1/{photo_name}/media?key=API_KEY&maxHeightPx=600` and returns it as `photoURL` — the app fetches and caches the image directly from Google.
@@ -221,7 +231,7 @@ Every LLM pass above goes through a provider-agnostic routing layer rather than 
 - **Providers:** Gemini (primary), Groq, Mistral, Cerebras — all free-tier, integrated via the Vercel AI SDK with Zod-validated structured output.
 - **Global rate-aware distribution:** a Firestore-backed multi-window (per-minute + per-day) limiter, keyed per model, spreads load across providers to stretch each free quota; a model is skipped when any of its windows is exhausted.
 - **Failover:** on a rate-limit / transient / schema-validation error, the router drops to the next provider in the class and drains the failed model's window so subsequent calls route elsewhere. It fails open (static priority order) if the limiter store is unavailable, so generation never blocks on it.
-- The chosen provider/model is invisible to the app — only the sidequest contract above is returned. (Each call is recorded server-side in `ai_call_logs` for observability.)
+- The chosen provider/model is invisible to the app — only the quest contract above is returned. (Each call is recorded server-side in `ai_call_logs` for observability.)
 
 ### Security
 
@@ -231,7 +241,7 @@ Every LLM pass above goes through a provider-agnostic routing layer rather than 
 
 ### What the app receives
 
-The app doesn't know about Gemini or the orchestration details. It just receives a sidequest with an optional `locationInformation` object containing `address`, `latitude`, `longitude`, `photoURL`, and (when city coordinates were supplied) `distanceMiles` and `transportationOptions`. The `photoURL` is a Google Maps media URL that the app loads directly.
+The app doesn't know about the LLM router or the orchestration details. It just receives a quest with an optional `locationInformation` object containing `address`, `latitude`, `longitude`, `photoURL`, and (when city coordinates were supplied) `distanceMiles` and `transportationOptions`. The `photoURL` is a Google Maps media URL that the app loads directly.
 
 ### Image loading on the app side
 
@@ -243,4 +253,4 @@ The app doesn't know about Gemini or the orchestration details. It just receives
 
 ## Note on Share Captions
 
-Share captions are **not AI-generated**. The app uses pre-configured template text with placeholders (e.g., sidequest title, categories) that is general enough for social media posting. This keeps sharing instant, offline-capable, and free of API calls.
+Share captions are **not AI-generated**. The app uses pre-configured template text with placeholders (e.g., quest title, categories) that is general enough for social media posting. This keeps sharing instant, offline-capable, and free of API calls.

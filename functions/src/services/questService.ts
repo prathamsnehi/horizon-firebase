@@ -1,14 +1,14 @@
 import {
   UserProfile,
-  SidequestItem,
+  QuestItem,
   LocationInformation,
   TransportationMode,
 } from "../types";
 import {
   generateLocationConcepts,
-  generateSidequestsWriter,
-  generateGenericSidequests,
-  planDescribedSidequest,
+  generateQuestsWriter,
+  generateGenericQuests,
+  planDescribedQuest,
   LogContext,
 } from "../llm";
 import { getBestLocation } from "../integrations/maps";
@@ -26,7 +26,7 @@ export interface BatchStageTimings {
 }
 
 export interface GenerateBatchResult {
-  sidequests: SidequestItem[];
+  quests: QuestItem[];
   stageTimings: BatchStageTimings;
 }
 
@@ -74,7 +74,7 @@ export function enrichLocations(
 /**
  * Core two-pass, distance-aware batch generator (Scout → Maps → Writer → generic
  * deficit-fill). Provider-agnostic via the llm/ layer. Throws if it can't
- * produce any sidequests. Callers are responsible for flushing AI-call logs.
+ * produce any quests. Callers are responsible for flushing AI-call logs.
  */
 export async function generateBatch(
   profile: UserProfile,
@@ -109,46 +109,46 @@ export async function generateBatch(
   const enrichedLocations = enrichLocations(profile, validLocations);
 
   // --- PASS 4: WRITER ---
-  const finalSidequests: SidequestItem[] = [];
+  const finalQuests: QuestItem[] = [];
   let writerMs = 0;
   if (enrichedLocations.length > 0) {
     const tWriter = Date.now();
-    const locationSidequests = await generateSidequestsWriter(
+    const locationQuests = await generateQuestsWriter(
       profile,
       enrichedLocations,
       logCtx
     );
     writerMs = Date.now() - tWriter;
-    finalSidequests.push(...locationSidequests);
+    finalQuests.push(...locationQuests);
   }
 
   // --- STEP 4.5: GENERIC FALLBACK (deficit filling) ---
   let genericFallbackMs = 0;
-  const deficit = count - finalSidequests.length;
+  const deficit = count - finalQuests.length;
   if (deficit > 0) {
     const tGeneric = Date.now();
-    const genericSidequests = await generateGenericSidequests(
+    const genericQuests = await generateGenericQuests(
       profile,
       deficit,
       excludeTitles,
       logCtx
     );
     genericFallbackMs = Date.now() - tGeneric;
-    finalSidequests.push(...genericSidequests);
+    finalQuests.push(...genericQuests);
   }
 
-  if (finalSidequests.length === 0) {
-    throw new Error("Writer failed to produce any sidequests.");
+  if (finalQuests.length === 0) {
+    throw new Error("Writer failed to produce any quests.");
   }
 
   return {
-    sidequests: finalSidequests,
+    quests: finalQuests,
     stageTimings: { scoutMs, mapsMs, writerMs, genericFallbackMs },
   };
 }
 
 /**
- * Generate a single sidequest from a user's freeform description. Plans whether
+ * Generate a single quest from a user's freeform description. Plans whether
  * the request needs a real place (→ Maps + location writer) or is location-
  * agnostic (→ generic writer), falling back to generic if Maps can't resolve.
  * Returns null only if generation produced nothing.
@@ -157,14 +157,14 @@ export async function generateDescribed(
   prompt: string,
   profile: UserProfile,
   logCtx?: LogContext
-): Promise<SidequestItem | null> {
-  const plan = await planDescribedSidequest(prompt, profile, logCtx);
+): Promise<QuestItem | null> {
+  const plan = await planDescribedQuest(prompt, profile, logCtx);
 
   if (plan.mode === "location" && plan.textQuery) {
     const loc = await getBestLocation(plan.textQuery);
     if (loc) {
       const enriched = enrichLocations(profile, [loc]);
-      const items = await generateSidequestsWriter(
+      const items = await generateQuestsWriter(
         profile,
         enriched,
         logCtx,
@@ -175,7 +175,7 @@ export async function generateDescribed(
     // Maps couldn't resolve — fall through to a generic quest.
   }
 
-  const generic = await generateGenericSidequests(
+  const generic = await generateGenericQuests(
     profile,
     1,
     [],

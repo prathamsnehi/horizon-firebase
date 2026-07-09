@@ -1,7 +1,7 @@
 import {
   locationConceptsSchema,
-  writerSidequestsSchema,
-  genericSidequestsSchema,
+  writerQuestsSchema,
+  genericQuestsSchema,
 } from "../../llm/schemas";
 
 describe("locationConceptsSchema", () => {
@@ -21,9 +21,9 @@ describe("locationConceptsSchema", () => {
   });
 });
 
-describe("writerSidequestsSchema", () => {
+describe("writerQuestsSchema", () => {
   const valid = {
-    sidequests: [
+    quests: [
       {
         title: "T",
         questDescription: "D",
@@ -38,30 +38,30 @@ describe("writerSidequestsSchema", () => {
   };
 
   it("accepts a valid writer object", () => {
-    expect(writerSidequestsSchema.parse(valid).sidequests[0].title).toBe("T");
+    expect(writerQuestsSchema.parse(valid).quests[0].title).toBe("T");
   });
 
   it("rejects a non-integer estimatedActivityMinutes", () => {
     const bad = {
-      sidequests: [{ ...valid.sidequests[0], estimatedActivityMinutes: 12.5 }],
+      quests: [{ ...valid.quests[0], estimatedActivityMinutes: 12.5 }],
     };
-    expect(() => writerSidequestsSchema.parse(bad)).toThrow();
+    expect(() => writerQuestsSchema.parse(bad)).toThrow();
   });
 
   it("rejects an out-of-enum transport mode", () => {
     const bad = {
-      sidequests: [
-        { ...valid.sidequests[0], recommendedTransportationMode: "teleport" },
+      quests: [
+        { ...valid.quests[0], recommendedTransportationMode: "teleport" },
       ],
     };
-    expect(() => writerSidequestsSchema.parse(bad)).toThrow();
+    expect(() => writerQuestsSchema.parse(bad)).toThrow();
   });
 });
 
-describe("genericSidequestsSchema", () => {
+describe("genericQuestsSchema", () => {
   it("accepts a location-agnostic quest (no assignedLocationId)", () => {
-    const parsed = genericSidequestsSchema.parse({
-      sidequests: [
+    const parsed = genericQuestsSchema.parse({
+      quests: [
         {
           title: "T",
           questDescription: "D",
@@ -71,6 +71,6 @@ describe("genericSidequestsSchema", () => {
         },
       ],
     });
-    expect(parsed.sidequests).toHaveLength(1);
+    expect(parsed.quests).toHaveLength(1);
   });
 });

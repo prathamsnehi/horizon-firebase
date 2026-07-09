@@ -1,21 +1,21 @@
 import {
   UserProfile,
   LocationConcept,
-  SidequestItem,
+  QuestItem,
   LocationInformation,
   DescribePlan,
 } from "../types";
 import {
   buildLocationConceptsPrompt,
-  buildSidequestWriterPrompt,
-  buildGenericSidequestWriterPrompt,
+  buildQuestWriterPrompt,
+  buildGenericQuestWriterPrompt,
   buildDescribePlannerPrompt,
 } from "../utils/prompts";
 import { generateObjectWithRouting } from "./router";
 import {
   locationConceptsSchema,
-  writerSidequestsSchema,
-  genericSidequestsSchema,
+  writerQuestsSchema,
+  genericQuestsSchema,
   describePlanSchema,
 } from "./schemas";
 import { saveAiCallLog } from "../integrations/firestore";
@@ -73,34 +73,34 @@ export async function generateLocationConcepts(
 }
 
 /**
- * Pass 2 (Writer): generate final sidequests using the rich location data.
+ * Pass 2 (Writer): generate final quests using the rich location data.
  * Re-attaches the exact, untouched Maps data by assignedLocationId and marks
  * the recommended transport mode — unchanged from the original implementation.
  */
-export async function generateSidequestsWriter(
+export async function generateQuestsWriter(
   profile: UserProfile,
   locations: LocationInformation[],
   ctx?: LogContext,
   userIntent?: string,
-): Promise<SidequestItem[]> {
+): Promise<QuestItem[]> {
   // Inject IDs to guarantee we map the exact untouched Maps data back later.
   const locationsWithIds = locations.map((loc, index) => ({
     id: `loc_${index}`,
     ...loc,
   }));
 
-  const prompt = buildSidequestWriterPrompt(
+  const prompt = buildQuestWriterPrompt(
     profile,
     locationsWithIds,
     userIntent,
   );
   const result = await generateObjectWithRouting("writer", {
-    schema: writerSidequestsSchema,
+    schema: writerQuestsSchema,
     prompt,
   });
-  const rawSidequests = result.object.sidequests ?? [];
+  const rawQuests = result.object.quests ?? [];
 
-  const finalSidequests: SidequestItem[] = rawSidequests.map((sq) => {
+  const finalQuests: QuestItem[] = rawQuests.map((sq) => {
     const originalLocation = locationsWithIds.find(
       (l) => l.id === sq.assignedLocationId,
     );
@@ -134,37 +134,37 @@ export async function generateSidequestsWriter(
     };
   });
 
-  logCall("writer", result, rawSidequests, ctx);
-  return finalSidequests;
+  logCall("writer", result, rawQuests, ctx);
+  return finalQuests;
 }
 
 /**
- * Generates generic (no-location) sidequests to fill deficits when Maps fails
+ * Generates generic (no-location) quests to fill deficits when Maps fails
  * to resolve enough locations.
  */
-export async function generateGenericSidequests(
+export async function generateGenericQuests(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
   ctx?: LogContext,
   userIntent?: string,
-): Promise<SidequestItem[]> {
+): Promise<QuestItem[]> {
   if (count <= 0) return [];
 
-  const prompt = buildGenericSidequestWriterPrompt(
+  const prompt = buildGenericQuestWriterPrompt(
     profile,
     count,
     excludeTitles,
     userIntent,
   );
   const result = await generateObjectWithRouting("generic", {
-    schema: genericSidequestsSchema,
+    schema: genericQuestsSchema,
     prompt,
     temperature: 0.8,
   });
-  const rawSidequests = result.object.sidequests ?? [];
+  const rawQuests = result.object.quests ?? [];
 
-  const finalSidequests: SidequestItem[] = rawSidequests.map((sq) => ({
+  const finalQuests: QuestItem[] = rawQuests.map((sq) => ({
     title: sq.title,
     questDescription: sq.questDescription,
     difficulty: sq.difficulty,
@@ -172,8 +172,8 @@ export async function generateGenericSidequests(
     categories: sq.categories,
   }));
 
-  logCall("generic", result, rawSidequests, ctx);
-  return finalSidequests;
+  logCall("generic", result, rawQuests, ctx);
+  return finalQuests;
 }
 
 /**
@@ -181,7 +181,7 @@ export async function generateGenericSidequests(
  * needs a specific real-world place (location) or is location-agnostic (generic).
  * Uses the fast "scout" model class. Logged under the "scout" stage.
  */
-export async function planDescribedSidequest(
+export async function planDescribedQuest(
   prompt: string,
   profile: UserProfile,
   ctx?: LogContext,

@@ -22,13 +22,13 @@ The routing layer itself is in place; these are the open items around it.
 
 ---
 
-## 2. Cache-first sidequests + describe mode — remaining follow-ups
+## 2. Cache-first quests + describe mode — remaining follow-ups
 
 The per-user cache-first flow and describe mode are in place; these remain.
 
 - **PT-accurate daily reset** — currently UTC date keys; align to the provider/product timezone later.
 - **Fuller describe moderation** — currently a lightweight keyword blocklist + provider safety; add a real moderation pass.
-- ~~**Full describe UI** in the web client~~ — **done**: the `/app/create` compose screen calls `generateUserDescribedSidequest` and commits the result as the active quest.
+- ~~**Full describe UI** in the web client~~ — **done**: the `/app/create` compose screen calls `generateUserDescribedQuest` and commits the result as the active quest.
 - **Enable the Cloud Tasks API** in the project for pre-gen enqueue to work (ops).
 - Cross-user global pool — see #4.
 
