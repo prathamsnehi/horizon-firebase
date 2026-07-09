@@ -1,19 +1,19 @@
-import { UserProfile, SidequestItem, LocationInformation } from "../../types";
+import { UserProfile, QuestItem, LocationInformation } from "../../types";
 
 // Mock the LLM layer and Maps so no network/secrets are touched.
 jest.mock("../../llm", () => ({
-  planDescribedSidequest: jest.fn(),
-  generateSidequestsWriter: jest.fn(),
-  generateGenericSidequests: jest.fn(),
+  planDescribedQuest: jest.fn(),
+  generateQuestsWriter: jest.fn(),
+  generateGenericQuests: jest.fn(),
   generateLocationConcepts: jest.fn(),
 }));
 jest.mock("../../integrations/maps", () => ({ getBestLocation: jest.fn() }));
 
-import { generateDescribed } from "../../services/sidequestService";
+import { generateDescribed } from "../../services/questService";
 import {
-  planDescribedSidequest,
-  generateSidequestsWriter,
-  generateGenericSidequests,
+  planDescribedQuest,
+  generateQuestsWriter,
+  generateGenericQuests,
 } from "../../llm";
 import { getBestLocation } from "../../integrations/maps";
 
@@ -29,7 +29,7 @@ const profile: UserProfile = {
   city: "San Francisco",
 };
 
-function item(title: string): SidequestItem {
+function item(title: string): QuestItem {
   return {
     title,
     questDescription: "d",
@@ -49,9 +49,9 @@ const loc = {
   googleMapsURL: "",
 } as LocationInformation;
 
-const plan = planDescribedSidequest as jest.Mock;
-const writer = generateSidequestsWriter as jest.Mock;
-const generic = generateGenericSidequests as jest.Mock;
+const plan = planDescribedQuest as jest.Mock;
+const writer = generateQuestsWriter as jest.Mock;
+const generic = generateGenericQuests as jest.Mock;
 const maps = getBestLocation as jest.Mock;
 
 describe("generateDescribed", () => {

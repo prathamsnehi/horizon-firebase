@@ -8,7 +8,7 @@ import { UserProfile } from "../types";
  * user's preferences change.
  *
  * Note: cityLatitude/cityLongitude are intentionally excluded — they affect
- * distance math but not which sidequests are generated; the `city` string change
+ * distance math but not which quests are generated; the `city` string change
  * (moving cities) already flips the hash.
  */
 export function hashProfile(profile: UserProfile): string {

@@ -81,7 +81,7 @@ export const MODEL_CLASSES: Record<ModelClassName, ModelCandidate[]> = {
     { providerId: "mistral", modelId: "mistral-small-latest" },
     { providerId: "cerebras", modelId: "gpt-oss-120b" },
   ],
-  // Quality writing of the final sidequests.
+  // Quality writing of the final quests.
   writer: [
     { providerId: "gemini", modelId: "gemini-3.5-flash" },
     { providerId: "groq", modelId: "llama-3.3-70b-versatile" },

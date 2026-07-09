@@ -30,34 +30,34 @@ export interface UserProfile {
 }
 
 // -------------------------
-// generateCuratedSidequests types:
+// generateCuratedQuests types:
 // -------------------------
 
 /**
  * Request for the curated daily batch. Count is server-controlled
  * (CURATED_BATCH_SIZE), so the client does not send it.
  */
-export interface CuratedSidequestRequest {
+export interface CuratedQuestRequest {
   profile: UserProfile;
   deviceId: string;
   excludeTitles?: string[];
 }
 
 // -------------------------
-// generateUserDescribedSidequest types:
+// generateUserDescribedQuest types:
 // -------------------------
 
 /**
- * Request for a single, freeform user-described sidequest.
+ * Request for a single, freeform user-described quest.
  */
-export interface DescribedSidequestRequest {
+export interface DescribedQuestRequest {
   prompt: string;
   profile: UserProfile;
   deviceId: string;
 }
 
-export interface DescribedSidequestResponse {
-  sidequest: SidequestItem | null;
+export interface DescribedQuestResponse {
+  quest: QuestItem | null;
 }
 
 /**
@@ -87,7 +87,7 @@ export interface LocationInformation {
   transportationOptions?: TransportationOption[];
 }
 
-export interface SidequestItem {
+export interface QuestItem {
   title: string;
   questDescription: string;
   difficulty: "easy" | "moderate" | "hard" | "extreme";
@@ -103,19 +103,19 @@ export interface SidequestItem {
  * record where the latency goes. Optional & additive — older/other clients
  * (e.g. iOS) simply ignore it. All values are milliseconds.
  */
-export interface SidequestTimings {
+export interface QuestTimings {
   scoutMs: number; // Pass 1: Gemini location-concept generation
   mapsMs: number; // Google Maps resolution (parallel)
-  writerMs: number; // Pass 2: Gemini sidequest writing
+  writerMs: number; // Pass 2: Gemini quest writing
   genericFallbackMs: number; // Deficit-filling generic generation (0 if skipped)
   totalServerMs: number; // Whole handler, validation → response
   coldStart: boolean; // True if this invocation booted a fresh container
   cached?: boolean; // True when served from cache (no generation happened)
 }
 
-export interface SidequestResponse {
-  sidequests: SidequestItem[] | null;
-  timings?: SidequestTimings;
+export interface QuestResponse {
+  quests: QuestItem[] | null;
+  timings?: QuestTimings;
 }
 
 // ------------------------------
@@ -123,7 +123,7 @@ export interface SidequestResponse {
 // ------------------------------
 
 export interface GetStartedRequest {
-  sidequest: SidequestItem;
+  quest: QuestItem;
   profile: UserProfile;
 }
 
@@ -155,8 +155,8 @@ export interface LocationConceptsResponse {
 // ------------------------------
 
 /**
- * Represents a document in the `user_sidequests/{deviceId}` collection — the
- * per-user cache state for both the curated batch and the described sidequest.
+ * Represents a document in the `user_quests/{deviceId}` collection — the
+ * per-user cache state for both the curated batch and the described quest.
  *
  * `served*` fields record what the user got most recently. `next*` fields hold
  * the background-pre-generated batch ready to serve next, validated by profile
@@ -166,18 +166,18 @@ export interface LocationConceptsResponse {
  * fields are used for caching only. The `*Date` fields are retained so a daily
  * cap can be re-enabled later without a schema change.
  */
-export interface UserSidequestStateDocument {
+export interface UserQuestStateDocument {
   deviceId: string;
 
   // Curated daily batch
-  servedBatch?: SidequestItem[];
+  servedBatch?: QuestItem[];
   servedDate?: string; // "YYYY-MM-DD" — last day a curated batch was served
-  nextBatch?: SidequestItem[];
+  nextBatch?: QuestItem[];
   nextBatchHash?: string; // profileHash of nextBatch
   nextBatchCreatedAt?: number; // Unix ms, for TTL validation
 
-  // Described daily sidequest
-  describeResult?: SidequestItem;
+  // Described daily quest
+  describeResult?: QuestItem;
   describeDate?: string; // "YYYY-MM-DD" — last day a described quest was served
   describePrompt?: string; // the prompt that produced describeResult (idempotency key)
 }

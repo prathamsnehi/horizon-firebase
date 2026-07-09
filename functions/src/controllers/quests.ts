@@ -1,20 +1,20 @@
 import * as functions from "firebase-functions/v2";
 import { getFunctions } from "firebase-admin/functions";
 import {
-  CuratedSidequestRequest,
-  DescribedSidequestRequest,
-  SidequestResponse,
-  SidequestTimings,
-  DescribedSidequestResponse,
-  SidequestItem,
+  CuratedQuestRequest,
+  DescribedQuestRequest,
+  QuestResponse,
+  QuestTimings,
+  DescribedQuestResponse,
+  QuestItem,
   PregenTaskPayload,
 } from "../types";
 import { LogContext } from "../llm";
-import { generateBatch, generateDescribed } from "../services/sidequestService";
+import { generateBatch, generateDescribed } from "../services/questService";
 import { hashProfile } from "../utils/hash";
 import {
   flushAiCallLogs,
-  getUserSidequestState,
+  getUserQuestState,
   saveServedBatch,
   saveDescribeResult,
   dateKey,
@@ -44,14 +44,14 @@ const LLM_SECRETS = [
  */
 let isWarm = false;
 
-function validateCuratedRequest(data: any): data is CuratedSidequestRequest {
+function validateCuratedRequest(data: any): data is CuratedQuestRequest {
   if (!data || typeof data !== "object") return false;
   if (!data.profile || typeof data.profile !== "object") return false;
   if (typeof data.deviceId !== "string") return false;
   return true;
 }
 
-function validateDescribedRequest(data: any): data is DescribedSidequestRequest {
+function validateDescribedRequest(data: any): data is DescribedQuestRequest {
   if (!data || typeof data !== "object") return false;
   if (typeof data.prompt !== "string" || data.prompt.trim().length === 0) return false;
   if (!data.profile || typeof data.profile !== "object") return false;
@@ -89,20 +89,20 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
 }
 
 /**
- * `generateCuratedSidequests` — the client-facing daily batch.
+ * `generateCuratedQuests` — the client-facing daily batch.
  *
  * Cache-first: returns today's already-served batch (idempotent), else serves a
  * valid pre-generated batch, else generates synchronously. After serving, it
  * enqueues a Cloud Task to pre-generate the next batch. Count is server-controlled
  * (CURATED_BATCH_SIZE); the request carries only { profile, deviceId, excludeTitles? }.
  */
-export const generateCuratedSidequests = functions.https.onCall(
+export const generateCuratedQuests = functions.https.onCall(
   { enforceAppCheck: true, secrets: LLM_SECRETS },
-  async (request): Promise<SidequestResponse> => {
+  async (request): Promise<QuestResponse> => {
     if (!validateCuratedRequest(request.data)) {
       throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
     }
-    const { profile, deviceId, excludeTitles } = request.data as CuratedSidequestRequest;
+    const { profile, deviceId, excludeTitles } = request.data as CuratedQuestRequest;
     const logCtx: LogContext = { deviceId, profile };
 
     const serverStart = Date.now();
@@ -112,7 +112,7 @@ export const generateCuratedSidequests = functions.https.onCall(
     try {
       const today = dateKey();
       const hash = hashProfile(profile);
-      const state = await getUserSidequestState(deviceId);
+      const state = await getUserQuestState(deviceId);
 
       // NOTE: No per-user daily cap during the testing phase — every call
       // generates (or serves a valid pre-generated batch). If usage limiting is
@@ -126,7 +126,7 @@ export const generateCuratedSidequests = functions.https.onCall(
         !!state.nextBatchCreatedAt &&
         Date.now() - state.nextBatchCreatedAt < BATCH_TTL_MS;
 
-      let batch: SidequestItem[];
+      let batch: QuestItem[];
       let stageTimings = { scoutMs: 0, mapsMs: 0, writerMs: 0, genericFallbackMs: 0 };
       let cached = false;
 
@@ -140,7 +140,7 @@ export const generateCuratedSidequests = functions.https.onCall(
           excludeTitles ?? [],
           logCtx
         );
-        batch = result.sidequests;
+        batch = result.quests;
         stageTimings = result.stageTimings;
         await flushAiCallLogs();
       }
@@ -150,36 +150,36 @@ export const generateCuratedSidequests = functions.https.onCall(
       // ...and queue up the next one so tomorrow is instant.
       await enqueuePregen({ deviceId, profile });
 
-      const timings: SidequestTimings = {
+      const timings: QuestTimings = {
         ...stageTimings,
         totalServerMs: Date.now() - serverStart,
         coldStart,
         cached,
       };
-      return { sidequests: batch, timings };
+      return { quests: batch, timings };
     } catch (error) {
-      console.error("[generateCuratedSidequests] Fatal error:", error);
+      console.error("[generateCuratedQuests] Fatal error:", error);
       throw new functions.https.HttpsError(
         "internal",
-        "An error occurred while generating sidequests."
+        "An error occurred while generating quests."
       );
     }
   }
 );
 
 /**
- * `generateUserDescribedSidequest` — one tailored sidequest from a freeform
+ * `generateUserDescribedQuest` — one tailored quest from a freeform
  * prompt. Auto-decides real-location vs location-agnostic. Limited to one per
  * day per device: a repeat with the SAME prompt re-serves (retry-safe), a
  * DIFFERENT prompt the same day is rejected as rate-limited.
  */
-export const generateUserDescribedSidequest = functions.https.onCall(
+export const generateUserDescribedQuest = functions.https.onCall(
   { enforceAppCheck: true, secrets: LLM_SECRETS },
-  async (request): Promise<DescribedSidequestResponse> => {
+  async (request): Promise<DescribedQuestResponse> => {
     if (!validateDescribedRequest(request.data)) {
       throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
     }
-    const { prompt, profile, deviceId } = request.data as DescribedSidequestRequest;
+    const { prompt, profile, deviceId } = request.data as DescribedQuestRequest;
     const logCtx: LogContext = { deviceId, profile };
 
     const today = dateKey();
@@ -190,23 +190,23 @@ export const generateUserDescribedSidequest = functions.https.onCall(
     if (!isDescribePromptAllowed(prompt)) {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        "That request can't be turned into a sidequest."
+        "That request can't be turned into a quest."
       );
     }
 
     try {
-      const sidequest = await generateDescribed(prompt, profile, logCtx);
+      const quest = await generateDescribed(prompt, profile, logCtx);
       await flushAiCallLogs();
-      if (!sidequest) {
-        throw new Error("Describe generation produced no sidequest.");
+      if (!quest) {
+        throw new Error("Describe generation produced no quest.");
       }
-      await saveDescribeResult(deviceId, sidequest, prompt, today);
-      return { sidequest };
+      await saveDescribeResult(deviceId, quest, prompt, today);
+      return { quest };
     } catch (error) {
-      console.error("[generateUserDescribedSidequest] Fatal error:", error);
+      console.error("[generateUserDescribedQuest] Fatal error:", error);
       throw new functions.https.HttpsError(
         "internal",
-        "An error occurred while crafting your sidequest."
+        "An error occurred while crafting your quest."
       );
     }
   }

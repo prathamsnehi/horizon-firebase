@@ -25,9 +25,9 @@ export const locationConceptsSchema = z.object({
   ),
 });
 
-// Pass 2 (Writer): final sidequests tied to resolved locations.
-export const writerSidequestsSchema = z.object({
-  sidequests: z.array(
+// Pass 2 (Writer): final quests tied to resolved locations.
+export const writerQuestsSchema = z.object({
+  quests: z.array(
     z.object({
       title: z.string(),
       questDescription: z.string(),
@@ -49,9 +49,9 @@ export const describePlanSchema = z.object({
   textQuery: z.string().optional(),
 });
 
-// Generic fallback: location-agnostic sidequests (no assignedLocationId).
-export const genericSidequestsSchema = z.object({
-  sidequests: z.array(
+// Generic fallback: location-agnostic quests (no assignedLocationId).
+export const genericQuestsSchema = z.object({
+  quests: z.array(
     z.object({
       title: z.string(),
       questDescription: z.string(),

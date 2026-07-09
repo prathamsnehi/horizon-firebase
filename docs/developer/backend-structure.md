@@ -20,11 +20,11 @@ functions/
     │   └── prompts.ts           # Prompt builders (scout, writer, generic, describe planner)
     │
     ├── controllers/             # Layer 1: Firebase Callable / Task Handlers
-    │   ├── sidequests.ts        # generateCuratedSidequests, generateUserDescribedSidequest
+    │   ├── quests.ts        # generateCuratedQuests, generateUserDescribedQuest
     │   └── tasks.ts             # pregenerateCuratedBatch (onTaskDispatched)
     │
     ├── services/                # Layer 2: Core Business Logic
-    │   └── sidequestService.ts  # generateBatch, generateDescribed, enrichLocations
+    │   └── questService.ts  # generateBatch, generateDescribed, enrichLocations
     │
     ├── llm/                     # Provider-agnostic LLM layer (Vercel AI SDK)
     │   ├── router.ts            # distribute + failover across providers
@@ -35,7 +35,7 @@ functions/
     │
     └── integrations/            # Layer 3: External APIs & Database
         ├── maps.ts              # Google Maps Places API wrapper (getBestLocation)
-        └── firestore.ts         # Cache (user_sidequests), ai_call_logs, rate buckets
+        └── firestore.ts         # Cache (user_quests), ai_call_logs, rate buckets
 ```
 
 _Note: the old `integrations/gemini.ts` was replaced by the multi-provider `llm/` layer._
@@ -54,13 +54,13 @@ _Note: the old `integrations/gemini.ts` was replaced by the multi-provider `llm/
   - Catches any errors thrown by the Service and formats them into Firebase `HttpsError` objects so the iOS app receives clean error codes (e.g., `rate_limited`).
 - **What it DOES NOT do:** No AI logic, no API keys, no direct database calls.
 
-*Example:* `controllers/sidequests.ts` just receives the profile and device ID, passes them to `SidequestService.getBatch()`, and returns the result.
+*Example:* `controllers/quests.ts` just receives the profile and device ID, passes them to `QuestService.getBatch()`, and returns the result.
 
 ### 2. Services (`src/services/`)
 **Responsibility:** The brain of the backend (Business Logic).
 - **What it does:**
   - Implements the core logic of the app.
-  - For sidequests, it checks the Firestore cache (via the Integration layer). 
+  - For quests, it checks the Firestore cache (via the Integration layer). 
   - If a cache miss occurs, it asks Gemini (Integration layer) for new quests, loops through them to fetch photos from Maps (Integration layer), and returns the final payload.
   - Triggers the background promise to pre-generate the next batch.
 - **Why this layer exists:** The Service layer takes standard TypeScript arguments and returns standard objects. Because it doesn't know about Firebase's `request` and `response` objects, you can easily write unit tests for it locally.
@@ -92,12 +92,12 @@ Hardcoded values and configurations go here. For example:
 
 ## Example Flow: The curated daily batch (cache-first)
 
-1. **App** calls `generateCuratedSidequests`.
-2. **Controller (`controllers/sidequests.ts`)** validates the payload, reads `user_sidequests/{deviceId}` via `firestore.ts`, and computes the profile hash (`utils/hash.ts`).
+1. **App** calls `generateCuratedQuests`.
+2. **Controller (`controllers/quests.ts`)** validates the payload, reads `user_quests/{deviceId}` via `firestore.ts`, and computes the profile hash (`utils/hash.ts`).
 3. **Cache hit (served today):** returns the stored `servedBatch` immediately (idempotent, `timings.cached = true`). Done.
 4. **Cache hit (valid `nextBatch`):** serves the pre-generated batch.
-5. **Cache miss:** calls **Service (`services/sidequestService.ts`) → `generateBatch`**, which runs the two-pass pipeline via the **`llm/`** layer (scout → Maps `getBestLocation` → distance/transport enrich → writer → generic deficit-fill).
+5. **Cache miss:** calls **Service (`services/questService.ts`) → `generateBatch`**, which runs the two-pass pipeline via the **`llm/`** layer (scout → Maps `getBestLocation` → distance/transport enrich → writer → generic deficit-fill).
 6. The **Controller** persists the served batch, then **enqueues a Cloud Task** (`pregenerateCuratedBatch`) to build the next batch in the background, and returns the response.
 7. **`controllers/tasks.ts`** later runs the task off the request path, calling the same Service and saving `nextBatch` — so the next day is instant.
 
-The freeform `generateUserDescribedSidequest` follows a similar controller → service path, using the planner + single writer instead of a batch, and is not pre-generated.
+The freeform `generateUserDescribedQuest` follows a similar controller → service path, using the planner + single writer instead of a batch, and is not pre-generated.
