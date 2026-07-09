@@ -48,35 +48,35 @@ RULES:
 - Include the city/region name in every query so Maps searches the correct area.
 - Assign 'intendedDifficulty' to match the real geographic scale.
 - You may specify a radius of search within the query, but it is not compulsory.
-${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate location concepts similar to these recently completed sidequests: ${excludeTitles.join(", ")}` : ""}
+${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate location concepts similar to these recently completed quests: ${excludeTitles.join(", ")}` : ""}
 `;
 }
 
 /**
- * Builds the prompt for Pass 2 (Writer) to generate final sidequests.
+ * Builds the prompt for Pass 2 (Writer) to generate final quests.
  *
- * `userIntent` (optional) is the user's freeform "describe a sidequest" request;
- * when present, the sidequest should fulfill it using the provided location(s).
+ * `userIntent` (optional) is the user's freeform "describe a quest" request;
+ * when present, the quest should fulfill it using the provided location(s).
  */
-export function buildSidequestWriterPrompt(
+export function buildQuestWriterPrompt(
   profile: UserProfile,
   mapsResults: any[],
   userIntent?: string,
 ): string {
-  return `Write the final sidequests based on the real locations provided.
+  return `Write the final quests based on the real locations provided.
 
 USER PROFILE:
 Interests: ${profile.interests.join(",")}
 Growth Areas: ${profile.growthAreas.join(",")}
-${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe sidequest MUST directly fulfill this request using the location(s) below.\n` : ""}
+${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe quest MUST directly fulfill this request using the location(s) below.\n` : ""}
 LOCATIONS:
 ${JSON.stringify(mapsResults, null, 2)}
 
 RULES:
-1. Generate exactly ${mapsResults.length} sidequests.
+1. Generate exactly ${mapsResults.length} quests.
 2. Calculate final difficulty holistically: factor in both physical distance (miles) AND psychological stretch (growth areas).
 3. 'estimatedActivityMinutes' must reflect the activity time in minutes. Do NOT include travel time in 'estimatedActivityMinutes'.
-4. For each sidequest, provide the 'assignedLocationId' of the location you are writing the sidequest for.
+4. For each quest, provide the 'assignedLocationId' of the location you are writing the quest for.
 5. Provide the 'recommendedTransportationMode' (must be one of the modes available in that location's transportationOptions).
 6. Write a 'locationDescription': a vivid but VERY short summary of the place itself (what it is and why it's worth visiting), based on its name and address. Maximum 1-2 sentences. Describe the PLACE, not the quest.`;
 }
@@ -90,7 +90,7 @@ export function buildDescribePlannerPrompt(
   userPrompt: string,
   profile: UserProfile,
 ): string {
-  return `A user described a sidequest they want. Decide how to fulfill it.
+  return `A user described a quest they want. Decide how to fulfill it.
 
 USER REQUEST: "${userPrompt}"
 City: ${profile.city}
@@ -100,28 +100,28 @@ If it can be done at home, online, or anywhere (no specific venue needed), set m
 }
 
 /**
- * Builds the prompt for generating generic, at-home, or location-agnostic sidequests.
+ * Builds the prompt for generating generic, at-home, or location-agnostic quests.
  * This is used as a graceful fallback when Maps API fails to resolve locations.
  */
-export function buildGenericSidequestWriterPrompt(
+export function buildGenericQuestWriterPrompt(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
   userIntent?: string,
 ): string {
-  return `Write exactly ${count} generic, at-home, or location-agnostic sidequests.
+  return `Write exactly ${count} generic, at-home, or location-agnostic quests.
 
 USER PROFILE:
 Interests: ${profile.interests.join(",")}
 Growth Areas: ${profile.growthAreas.join(",")}
 Vibe: ${profile.vibe.join(",")}
 Context: ${profile.additionalContext || "None"}
-${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe sidequest(s) MUST directly fulfill this request.\n` : ""}
+${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe quest(s) MUST directly fulfill this request.\n` : ""}
 RULES:
-1. Generate exactly ${count} sidequests.
+1. Generate exactly ${count} quests.
 2. These quests can involve exploring or traveling, but they MUST be generic (e.g., "find a local cafe", "take a walk in a nearby park") because they will not be tied to a specific Google Maps location. They can also be at-home or online activities.
 3. 'estimatedActivityMinutes' must reflect the activity time in minutes.
 4. Integrate the user's Interests, Growth Areas, and Vibe to make these highly personalized.
-${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate quests similar to these recently completed sidequests: ${excludeTitles.join(", ")}` : ""}
+${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate quests similar to these recently completed quests: ${excludeTitles.join(", ")}` : ""}
 `;
 }

@@ -5,8 +5,8 @@ import {
   RateWindowConfig,
   ProviderRateState,
   RateWindowState,
-  UserSidequestStateDocument,
-  SidequestItem,
+  UserQuestStateDocument,
+  QuestItem,
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
 
@@ -180,24 +180,24 @@ export async function penalizeRateKey(rateKey: string): Promise<void> {
 }
 
 // ------------------------------
-// Per-user sidequest cache + daily usage (user_sidequests/{deviceId})
+// Per-user quest cache + daily usage (user_quests/{deviceId})
 // ------------------------------
 
-const USER_SIDEQUESTS_COLLECTION = "user_sidequests";
+const USER_QUESTS_COLLECTION = "user_quests";
 
 /** Current UTC date as "YYYY-MM-DD" — the daily-reset key. */
 export function dateKey(now: number = Date.now()): string {
   return new Date(now).toISOString().slice(0, 10);
 }
 
-export async function getUserSidequestState(
+export async function getUserQuestState(
   deviceId: string
-): Promise<UserSidequestStateDocument | null> {
+): Promise<UserQuestStateDocument | null> {
   const snap = await getDb()
-    .collection(USER_SIDEQUESTS_COLLECTION)
+    .collection(USER_QUESTS_COLLECTION)
     .doc(deviceId)
     .get();
-  return snap.exists ? (snap.data() as UserSidequestStateDocument) : null;
+  return snap.exists ? (snap.data() as UserQuestStateDocument) : null;
 }
 
 /**
@@ -206,11 +206,11 @@ export async function getUserSidequestState(
  */
 export async function saveServedBatch(
   deviceId: string,
-  batch: SidequestItem[],
+  batch: QuestItem[],
   date: string
 ): Promise<void> {
   await getDb()
-    .collection(USER_SIDEQUESTS_COLLECTION)
+    .collection(USER_QUESTS_COLLECTION)
     .doc(deviceId)
     .set(
       {
@@ -228,12 +228,12 @@ export async function saveServedBatch(
 /** Store a background pre-generated batch ready to serve next. */
 export async function savePregeneratedBatch(
   deviceId: string,
-  batch: SidequestItem[],
+  batch: QuestItem[],
   profileHash: string,
   createdAt: number = Date.now()
 ): Promise<void> {
   await getDb()
-    .collection(USER_SIDEQUESTS_COLLECTION)
+    .collection(USER_QUESTS_COLLECTION)
     .doc(deviceId)
     .set(
       {
@@ -246,20 +246,20 @@ export async function savePregeneratedBatch(
     );
 }
 
-/** Persist the most recently described sidequest (cache only). */
+/** Persist the most recently described quest (cache only). */
 export async function saveDescribeResult(
   deviceId: string,
-  sidequest: SidequestItem,
+  quest: QuestItem,
   prompt: string,
   date: string
 ): Promise<void> {
   await getDb()
-    .collection(USER_SIDEQUESTS_COLLECTION)
+    .collection(USER_QUESTS_COLLECTION)
     .doc(deviceId)
     .set(
       {
         deviceId,
-        describeResult: sidequest,
+        describeResult: quest,
         describePrompt: prompt,
         describeDate: date,
       },

@@ -5,9 +5,9 @@
  */
 export {
   generateLocationConcepts,
-  generateSidequestsWriter,
-  generateGenericSidequests,
-  planDescribedSidequest,
+  generateQuestsWriter,
+  generateGenericQuests,
+  planDescribedQuest,
 } from "./tasks";
 
 export type { LogContext } from "./tasks";

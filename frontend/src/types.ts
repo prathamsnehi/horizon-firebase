@@ -48,7 +48,7 @@ export interface DescribedSidequestRequest {
 }
 
 export interface DescribedSidequestResponse {
-  sidequest: SidequestItem | null;
+  quest: SidequestItem | null;
 }
 
 export interface TransportationOption {
@@ -90,7 +90,7 @@ export interface SidequestTimings {
 }
 
 export interface SidequestResponse {
-  sidequests: SidequestItem[] | null;
+  quests: SidequestItem[] | null;
   timings?: SidequestTimings;
 }
 

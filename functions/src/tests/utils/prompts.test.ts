@@ -1,4 +1,4 @@
-import { buildLocationConceptsPrompt, buildSidequestWriterPrompt, buildGenericSidequestWriterPrompt } from "../../utils/prompts";
+import { buildLocationConceptsPrompt, buildQuestWriterPrompt, buildGenericQuestWriterPrompt } from "../../utils/prompts";
 import { UserProfile, LocationInformation } from "../../types";
 
 describe("prompts utils", () => {
@@ -31,37 +31,37 @@ describe("prompts utils", () => {
         });
     });
 
-    describe("buildSidequestWriterPrompt", () => {
-        it("should pass the correct number of locations and request sidequests", () => {
+    describe("buildQuestWriterPrompt", () => {
+        it("should pass the correct number of locations and request quests", () => {
             const mockLocations = [
                 { id: "loc_0", name: "Philz Coffee", address: "123 Main St" },
                 { id: "loc_1", name: "Dolores Park", address: "456 Park Ave" }
             ] as unknown as LocationInformation[]; // Casting as we're testing the stringification
 
-            const prompt = buildSidequestWriterPrompt(mockProfile, mockLocations);
+            const prompt = buildQuestWriterPrompt(mockProfile, mockLocations);
 
-            expect(prompt).toContain("Generate exactly 2 sidequests");
+            expect(prompt).toContain("Generate exactly 2 quests");
             expect(prompt).toContain("Philz Coffee");
             expect(prompt).toContain("Dolores Park");
         });
 
         it("should include instructions for assignedLocationId and estimatedActivityMinutes", () => {
-            const prompt = buildSidequestWriterPrompt(mockProfile, []);
+            const prompt = buildQuestWriterPrompt(mockProfile, []);
             
             expect(prompt).toContain("'estimatedActivityMinutes' must reflect the activity time in minutes");
             expect(prompt).toContain("assignedLocationId");
         });
     });
 
-    describe("buildGenericSidequestWriterPrompt", () => {
-        it("should request the correct number of generic sidequests", () => {
-            const prompt = buildGenericSidequestWriterPrompt(mockProfile, 3);
+    describe("buildGenericQuestWriterPrompt", () => {
+        it("should request the correct number of generic quests", () => {
+            const prompt = buildGenericQuestWriterPrompt(mockProfile, 3);
             expect(prompt).toContain("Write exactly 3 generic");
-            expect(prompt).toContain("Generate exactly 3 sidequests");
+            expect(prompt).toContain("Generate exactly 3 quests");
         });
 
         it("should instruct the AI to make quests generic since they lack specific locations", () => {
-            const prompt = buildGenericSidequestWriterPrompt(mockProfile, 3);
+            const prompt = buildGenericQuestWriterPrompt(mockProfile, 3);
             expect(prompt).toContain("MUST be generic");
             expect(prompt).toContain("not be tied to a specific Google Maps location");
             expect(prompt).toContain("Interests: coffee,hiking");
@@ -69,7 +69,7 @@ describe("prompts utils", () => {
         });
 
         it("should include excludeTitles rule when provided", () => {
-            const prompt = buildGenericSidequestWriterPrompt(mockProfile, 1, ["Making Coffee", "Journaling"]);
+            const prompt = buildGenericQuestWriterPrompt(mockProfile, 1, ["Making Coffee", "Journaling"]);
             expect(prompt).toContain("Making Coffee, Journaling");
             expect(prompt).toContain("Do NOT generate quests similar");
         });

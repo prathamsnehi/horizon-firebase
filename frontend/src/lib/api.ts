@@ -95,10 +95,10 @@ export async function generateCuratedSidequests(
   try {
     const fn = httpsCallable<CuratedSidequestRequest, SidequestResponse>(
       getAppFunctions(),
-      "generateCuratedSidequests"
+      "generateCuratedQuests"
     );
     const res = await fn(payload);
-    const sidequests = res.data?.sidequests;
+    const sidequests = res.data?.quests;
     if (!sidequests || sidequests.length === 0) {
       throw new ApiError("generation_failed", "No sidequests were returned.");
     }
@@ -131,10 +131,10 @@ export async function generateUserDescribedSidequest(
   try {
     const fn = httpsCallable<DescribedSidequestRequest, DescribedSidequestResponse>(
       getAppFunctions(),
-      "generateUserDescribedSidequest"
+      "generateUserDescribedQuest"
     );
     const res = await fn(payload);
-    const sidequest = res.data?.sidequest;
+    const sidequest = res.data?.quest;
     if (!sidequest) {
       throw new ApiError("generation_failed", "No sidequest was returned.");
     }

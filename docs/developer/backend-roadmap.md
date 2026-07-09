@@ -16,7 +16,7 @@ Before writing logic, get your environment and external APIs ready.
 
 Define the data contracts first so TypeScript can guide your implementation.
 
-1. **Define API Contracts (types.ts):** Translate the JSON shapes from `api-contracts.md` into TypeScript `interfaces`. Create types for the detailed `UserProfile`, the sidequest object, and the sidequest generation request/response. ✅
+1. **Define API Contracts (types.ts):** Translate the JSON shapes from `api-contracts.md` into TypeScript `interfaces`. Create types for the detailed `UserProfile`, the quest object, and the quest generation request/response. ✅
 2. **Define Firestore Schema:** Create a type for the `pregenerated_batches` document so you get type safety when reading/writing to the cache. ✅
 3. **Setup Config (config.ts):** Export constants for your Secret names and any tuning parameters (like the 7-day expiration time, or the Maps API endpoint URL).✅
 
@@ -30,7 +30,7 @@ Build the wrappers for Gemini and Google Maps in isolation. Test these locally u
 2. **Gemini Helper (gemini.ts):**
    - Initialize the `GoogleGenerativeAI` client.
    - Create a helper for `generateGetStartedGuide`.
-   - Create the core `generateSidequests` helper. This is the hardest part: configure Gemini to use **Structured Output** (or function calling) to return an array of 10 quests, optionally including a text query string if a quest needs a location.
+   - Create the core `generateQuests` helper. This is the hardest part: configure Gemini to use **Structured Output** (or function calling) to return an array of 10 quests, optionally including a text query string if a quest needs a location.
 
 ### Phase 4: The Simple Cloud Functions
 
@@ -40,15 +40,15 @@ Wire up the endpoints that don't rely on Firestore or complex orchestration.
 
 ### Phase 5: The Pre-Generation Engine
 
-This is the most complex endpoint (`generateSidequests`), combining Gemini, Maps, and Firestore.
+This is the most complex endpoint (`generateQuests`), combining Gemini, Maps, and Firestore.
 
 1. **Build the Orchestrator (Two-Pass Architecture):** Write a private function that executes the full orchestration:
    - **Pass 1 (Scout):** Call the Gemini helper to generate 10 location concepts or search queries based on the user profile.
    - **Location Fetch:** Use `Promise.all()` to call your Maps helper in _parallel_ for the concepts, fetching Pro-tier location details (name, address, coordinates, photo). The place summary is written later by the Writer LLM, not fetched from Maps.
-   - **Pass 2 (Writer):** Feed the rich location objects back to Gemini to generate the final, highly-tailored sidequests.
+   - **Pass 2 (Writer):** Feed the rich location objects back to Gemini to generate the final, highly-tailored quests.
    - Merge the Maps `photoURL` and coordinates back into the final quest objects.
 2. **Implement Profile Hashing:** Write a small utility function to generate a stable string hash from the user's `UserProfile` (interests, growthAreas, vibe, experimentationLevel, budget, transportation, locationPreferences, additionalContext, city).
-3. **Implement the Cache Check:** In the `generateSidequests` callable function, write the logic to read `pregenerated_batches/{deviceId}` from Firestore. Compare the stored `profileHash` with the current one.
+3. **Implement the Cache Check:** In the `generateQuests` callable function, write the logic to read `pregenerated_batches/{deviceId}` from Firestore. Compare the stored `profileHash` with the current one.
 4. **Implement the Background Job:** Use Firebase's ability to run code after returning a response (in Node.js, you can start a Promise and return the HTTP response without awaiting it, though Firebase provides specific background task patterns as well). After serving the batch, asynchronously call your orchestrator to build the _next_ batch, and write it to Firestore.
 
 ### Phase 6: Security & Polish
