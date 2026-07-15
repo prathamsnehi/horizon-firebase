@@ -9,26 +9,13 @@ import {
   generateQuestsWriter,
   generateGenericQuests,
   planDescribedQuest,
-  LogContext,
 } from "../llm";
-import { getBestLocation } from "../integrations/maps";
+import { getBestLocation, fetchPlacePhotoBytes } from "../integrations/maps";
+import { saveLog } from "../integrations/firestore";
 import {
   calculateDistanceMiles,
   calculateAllTransportOptions,
 } from "../utils/distance";
-
-/** Per-stage timings for a single batch generation (milliseconds). */
-export interface BatchStageTimings {
-  scoutMs: number;
-  mapsMs: number;
-  writerMs: number;
-  genericFallbackMs: number;
-}
-
-export interface GenerateBatchResult {
-  quests: QuestItem[];
-  stageTimings: BatchStageTimings;
-}
 
 /**
  * Attach distance + heuristic transport options to resolved Maps locations.
@@ -74,33 +61,29 @@ export function enrichLocations(
 /**
  * Core two-pass, distance-aware batch generator (Scout → Maps → Writer → generic
  * deficit-fill). Provider-agnostic via the llm/ layer. Throws if it can't
- * produce any quests. Callers are responsible for flushing AI-call logs.
+ * produce any quests.
  */
 export async function generateBatch(
   profile: UserProfile,
   count: number,
-  excludeTitles: string[] = [],
-  logCtx?: LogContext
-): Promise<GenerateBatchResult> {
+  excludeTitles: string[] = []
+): Promise<QuestItem[]> {
   // --- PASS 1: SCOUT ---
-  const tScout = Date.now();
   const locationConcepts = await generateLocationConcepts(
     profile,
     count,
-    excludeTitles,
-    logCtx
+    excludeTitles
   );
-  const scoutMs = Date.now() - tScout;
   if (locationConcepts.length === 0) {
     throw new Error("Pass 1 failed to generate location concepts.");
   }
 
-  // --- STEP 2: LOCATION RESOLUTION (parallel) ---
+  // --- STEP 2: LOCATION RESOLUTION (parallel; latency logged) ---
   const tMaps = Date.now();
   const rawMapsResults = await Promise.all(
     locationConcepts.map((concept) => getBestLocation(concept.textQuery))
   );
-  const mapsMs = Date.now() - tMaps;
+  saveLog({ stage: "maps", latencyMs: Date.now() - tMaps, createdAt: Date.now() });
   const validLocations = rawMapsResults.filter(
     (loc): loc is LocationInformation => loc !== null
   );
@@ -110,41 +93,23 @@ export async function generateBatch(
 
   // --- PASS 4: WRITER ---
   const finalQuests: QuestItem[] = [];
-  let writerMs = 0;
   if (enrichedLocations.length > 0) {
-    const tWriter = Date.now();
-    const locationQuests = await generateQuestsWriter(
-      profile,
-      enrichedLocations,
-      logCtx
-    );
-    writerMs = Date.now() - tWriter;
-    finalQuests.push(...locationQuests);
+    finalQuests.push(...(await generateQuestsWriter(profile, enrichedLocations)));
   }
 
   // --- STEP 4.5: GENERIC FALLBACK (deficit filling) ---
-  let genericFallbackMs = 0;
   const deficit = count - finalQuests.length;
   if (deficit > 0) {
-    const tGeneric = Date.now();
-    const genericQuests = await generateGenericQuests(
-      profile,
-      deficit,
-      excludeTitles,
-      logCtx
+    finalQuests.push(
+      ...(await generateGenericQuests(profile, deficit, excludeTitles))
     );
-    genericFallbackMs = Date.now() - tGeneric;
-    finalQuests.push(...genericQuests);
   }
 
   if (finalQuests.length === 0) {
     throw new Error("Writer failed to produce any quests.");
   }
 
-  return {
-    quests: finalQuests,
-    stageTimings: { scoutMs, mapsMs, writerMs, genericFallbackMs },
-  };
+  return finalQuests;
 }
 
 /**
@@ -155,32 +120,52 @@ export async function generateBatch(
  */
 export async function generateDescribed(
   prompt: string,
-  profile: UserProfile,
-  logCtx?: LogContext
+  profile: UserProfile
 ): Promise<QuestItem | null> {
-  const plan = await planDescribedQuest(prompt, profile, logCtx);
+  const plan = await planDescribedQuest(prompt, profile);
 
   if (plan.mode === "location" && plan.textQuery) {
     const loc = await getBestLocation(plan.textQuery);
     if (loc) {
       const enriched = enrichLocations(profile, [loc]);
-      const items = await generateQuestsWriter(
-        profile,
-        enriched,
-        logCtx,
-        prompt
-      );
+      const items = await generateQuestsWriter(profile, enriched, prompt);
       if (items.length > 0) return items[0];
     }
     // Maps couldn't resolve — fall through to a generic quest.
   }
 
-  const generic = await generateGenericQuests(
-    profile,
-    1,
-    [],
-    logCtx,
-    prompt
-  );
+  const generic = await generateGenericQuests(profile, 1, [], prompt);
   return generic[0] ?? null;
+}
+
+/**
+ * Embeds hero-image bytes into quests for the RESPONSE only, fetched from each
+ * quest's `locationInformation.photoReference`. Returns new objects (originals
+ * are left byte-free so the cached/stored versions stay small — Firestore 1MB —
+ * and never persist Places imagery). Fetches run in parallel and are best-effort:
+ * a place with no reference, or a failed fetch, simply yields a quest with no
+ * embedded image (the client falls back to a placeholder). Call this AFTER
+ * persisting the batch, on the value being returned to the client.
+ */
+export async function attachQuestPhotos(
+  quests: QuestItem[]
+): Promise<QuestItem[]> {
+  return Promise.all(
+    quests.map(async (quest) => {
+      const ref = quest.locationInformation?.photoReference;
+      if (!ref) return quest;
+
+      const photo = await fetchPlacePhotoBytes(ref);
+      if (!photo) return quest;
+
+      return {
+        ...quest,
+        locationInformation: {
+          ...quest.locationInformation!,
+          photoImageBase64: photo.base64,
+          photoContentType: photo.contentType,
+        },
+      };
+    })
+  );
 }

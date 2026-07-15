@@ -1,0 +1,5 @@
+- have a flashy showcase video for the frontend (how they keep doing it on twitter with their apps with the smooth zooming in and out and stuff like that)
+- design in claude design first
+- it is a showcase website first, and not the actual interface of generating sidequests
+- - however, we will provide the users with the ability to try and generate a custom sidequests on the showcase website itself just to show how it works and stuff
+  - create a mockup of an iphone with UI taken from the ios home tab to show how the quest would look like in the app -> make this mockup as close to the UI as possible without tanking the performance of the website

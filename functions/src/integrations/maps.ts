@@ -1,5 +1,6 @@
 import { LocationInformation } from "../types";
 import { placesApiKey, PLACES_API_BASE_URL } from "../config";
+import { isValidPhotoReference } from "../utils/validation";
 
 /**
  * Helper to fetch places from Google Maps API
@@ -35,11 +36,11 @@ async function fetchPlaces(queryText: string, maxResults = 10) {
  * Helper to map a raw Google Place object to our LocationInformation type
  */
 function mapPlaceToLocation(place: any): LocationInformation {
-  let photoURL = "";
-  // If the place has photos, grab the first one and construct the media URL
-  if (place.photos && place.photos.length > 0) {
-    photoURL = `https://places.googleapis.com/v1/${place.photos[0].name}/media?key=${placesApiKey.value()}&maxHeightPx=600`;
-  }
+  // Store only the durable photo reference (the `name`); the media URL — which
+  // needs the API key — is reconstructed server-side at fetch time so the key
+  // never lands in the cache or a client response.
+  const photoReference: string =
+    place.photos && place.photos.length > 0 ? place.photos[0].name || "" : "";
 
   return {
     name: place.displayName?.text || "",
@@ -48,7 +49,7 @@ function mapPlaceToLocation(place: any): LocationInformation {
     latitude: place.location?.latitude || 0,
     longitude: place.location?.longitude || 0,
     googleMapsURL: place.googleMapsUri || "",
-    photoURL: photoURL,
+    photoReference: photoReference,
   };
 }
 
@@ -113,4 +114,33 @@ export async function getBestLocation(
   const pool = openPlaces.slice(0, SELECTION_POOL_SIZE);
   const pick = pool[Math.floor(Math.random() * pool.length)];
   return mapPlaceToLocation(pick);
+}
+
+/**
+ * Fetches the actual image bytes for a photo reference and returns them base64-
+ * encoded. The media URL (which embeds the API key) is built here, server-side,
+ * so the key is never persisted or sent to a client. The 600px height matches
+ * the dimension the old client-facing URL used. Returns null on any failure
+ * (invalid reference, non-OK response) — callers treat that as "no image".
+ */
+export async function fetchPlacePhotoBytes(
+  photoReference: string,
+): Promise<{ base64: string; contentType: string } | null> {
+  if (!isValidPhotoReference(photoReference)) return null;
+
+  const url = `https://places.googleapis.com/v1/${photoReference}/media?key=${placesApiKey.value()}&maxHeightPx=600`;
+
+  try {
+    const res = await fetch(url); // follows the redirect to the image bytes
+    if (!res.ok) {
+      console.error(`Place Photo Error: ${res.status} ${res.statusText}`);
+      return null;
+    }
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+    return { base64, contentType };
+  } catch (err) {
+    console.error("[fetchPlacePhotoBytes] failed:", err);
+    return null;
+  }
 }
