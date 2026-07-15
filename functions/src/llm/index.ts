@@ -9,5 +9,3 @@ export {
   generateGenericQuests,
   planDescribedQuest,
 } from "./tasks";
-
-export type { LogContext } from "./tasks";

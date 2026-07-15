@@ -1,10 +1,9 @@
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { PregenTaskPayload } from "../types";
-import { LogContext } from "../llm";
 import { generateBatch } from "../services/questService";
 import { hashProfile } from "../utils/hash";
 import {
-  flushAiCallLogs,
+  flushLogs,
   savePregeneratedBatch,
 } from "../integrations/firestore";
 import {
@@ -35,16 +34,10 @@ export const pregenerateCuratedBatch = onTaskDispatched(
       return;
     }
 
-    const logCtx: LogContext = { deviceId, profile };
     try {
-      const { quests } = await generateBatch(
-        profile,
-        CURATED_BATCH_SIZE,
-        [],
-        logCtx
-      );
+      const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
       await savePregeneratedBatch(deviceId, quests, hashProfile(profile));
-      await flushAiCallLogs();
+      await flushLogs();
       console.log(`[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`);
     } catch (err) {
       console.error("[pregenerateCuratedBatch] Failed:", err);

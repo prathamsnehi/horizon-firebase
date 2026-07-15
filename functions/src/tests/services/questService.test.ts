@@ -7,15 +7,18 @@ jest.mock("../../llm", () => ({
   generateGenericQuests: jest.fn(),
   generateLocationConcepts: jest.fn(),
 }));
-jest.mock("../../integrations/maps", () => ({ getBestLocation: jest.fn() }));
+jest.mock("../../integrations/maps", () => ({
+  getBestLocation: jest.fn(),
+  fetchPlacePhotoBytes: jest.fn(),
+}));
 
-import { generateDescribed } from "../../services/questService";
+import { generateDescribed, attachQuestPhotos } from "../../services/questService";
 import {
   planDescribedQuest,
   generateQuestsWriter,
   generateGenericQuests,
 } from "../../llm";
-import { getBestLocation } from "../../integrations/maps";
+import { getBestLocation, fetchPlacePhotoBytes } from "../../integrations/maps";
 
 const profile: UserProfile = {
   interests: ["food"],
@@ -45,7 +48,7 @@ const loc = {
   locationDescription: "",
   latitude: 37.7,
   longitude: -122.4,
-  photoURL: "",
+  photoReference: "",
   googleMapsURL: "",
 } as LocationInformation;
 
@@ -53,6 +56,7 @@ const plan = planDescribedQuest as jest.Mock;
 const writer = generateQuestsWriter as jest.Mock;
 const generic = generateGenericQuests as jest.Mock;
 const maps = getBestLocation as jest.Mock;
+const photoBytes = fetchPlacePhotoBytes as jest.Mock;
 
 describe("generateDescribed", () => {
   beforeEach(() => {
@@ -71,7 +75,7 @@ describe("generateDescribed", () => {
 
     expect(res?.title).toBe("Sushi Quest");
     // userIntent is the 4th positional arg to the writer.
-    expect(writer.mock.calls[0][3]).toBe("I want great sushi");
+    expect(writer.mock.calls[0][2]).toBe("I want great sushi"); // userIntent (3rd arg)
     expect(generic).not.toHaveBeenCalled();
   });
 
@@ -84,7 +88,7 @@ describe("generateDescribed", () => {
 
     expect(res?.title).toBe("At-home Quest");
     expect(writer).not.toHaveBeenCalled();
-    expect(generic.mock.calls[0][4]).toBe("something local"); // userIntent
+    expect(generic.mock.calls[0][3]).toBe("something local"); // userIntent (4th arg)
   });
 
   it("generic mode → never touches Maps", async () => {
@@ -103,5 +107,49 @@ describe("generateDescribed", () => {
 
     const res = await generateDescribed("x", profile);
     expect(res).toBeNull();
+  });
+});
+
+describe("attachQuestPhotos", () => {
+  beforeEach(() => photoBytes.mockReset());
+
+  function locationItem(title: string, photoReference: string): QuestItem {
+    return { ...item(title), locationInformation: { ...loc, photoReference } };
+  }
+
+  it("embeds base64 + content type for quests with a photo reference", async () => {
+    photoBytes.mockResolvedValue({ base64: "AAAA", contentType: "image/jpeg" });
+
+    const [result] = await attachQuestPhotos([
+      locationItem("Q", "places/a/photos/b"),
+    ]);
+
+    expect(result.locationInformation?.photoImageBase64).toBe("AAAA");
+    expect(result.locationInformation?.photoContentType).toBe("image/jpeg");
+    expect(photoBytes).toHaveBeenCalledWith("places/a/photos/b");
+  });
+
+  it("leaves generic (no-location) quests untouched and never fetches", async () => {
+    const [result] = await attachQuestPhotos([item("Generic")]);
+
+    expect(result.locationInformation).toBeUndefined();
+    expect(photoBytes).not.toHaveBeenCalled();
+  });
+
+  it("skips quests with an empty photo reference", async () => {
+    const [result] = await attachQuestPhotos([locationItem("Q", "")]);
+
+    expect(result.locationInformation?.photoImageBase64).toBeUndefined();
+    expect(photoBytes).not.toHaveBeenCalled();
+  });
+
+  it("tolerates a failed fetch (best-effort) — no image, no throw", async () => {
+    photoBytes.mockResolvedValue(null);
+
+    const [result] = await attachQuestPhotos([
+      locationItem("Q", "places/a/photos/b"),
+    ]);
+
+    expect(result.locationInformation?.photoImageBase64).toBeUndefined();
   });
 });

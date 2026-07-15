@@ -1,4 +1,4 @@
-import {getTopLocation, getRandomLocation, getBestLocation} from "../../integrations/maps";
+import {getTopLocation, getRandomLocation, getBestLocation, fetchPlacePhotoBytes} from "../../integrations/maps";
 
 // Mock the config so we don't try to read real Secret Manager values
 jest.mock("../../config", () => ({
@@ -44,7 +44,7 @@ describe("Maps Integration", () => {
     expect(result?.latitude).toBe(46.6);
     expect(result?.longitude).toBe(-92.3);
     expect(result?.googleMapsURL).toBe("https://maps.google.com/?cid=123");
-    expect(result?.photoURL).toBe("https://places.googleapis.com/v1/places/123/photos/456/media?key=mock-api-key&maxHeightPx=600");
+    expect(result?.photoReference).toBe("places/123/photos/456");
   });
 
   it("should gracefully handle missing optional fields (like photos or descriptions)", async () => {
@@ -69,7 +69,7 @@ describe("Maps Integration", () => {
 
     expect(result).not.toBeNull();
     expect(result?.locationDescription).toBe(""); // Should default to empty string
-    expect(result?.photoURL).toBe(""); // Should default to empty string
+    expect(result?.photoReference).toBe(""); // Should default to empty string
   });
 
   it("should return null if no places are found", async () => {
@@ -193,6 +193,41 @@ describe("Maps Integration", () => {
       mockPlaces([]);
 
       expect(await getBestLocation("nonexistent place")).toBeNull();
+    });
+  });
+
+  describe("fetchPlacePhotoBytes", () => {
+    const validRef = "places/ChIJ_abc/photos/AUac_xyz";
+
+    it("returns null for an invalid reference without hitting the network", async () => {
+      (global.fetch as jest.Mock).mockClear();
+      expect(await fetchPlacePhotoBytes("not-a-reference")).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("returns base64 bytes + content type on a successful fetch", async () => {
+      const bytes = new TextEncoder().encode("hello");
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        headers: {get: () => "image/png"},
+        arrayBuffer: async () => bytes.buffer,
+      });
+
+      const result = await fetchPlacePhotoBytes(validRef);
+
+      expect(result).toEqual({
+        base64: Buffer.from("hello").toString("base64"),
+        contentType: "image/png",
+      });
+    });
+
+    it("returns null on a non-OK response", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+      });
+      expect(await fetchPlacePhotoBytes(validRef)).toBeNull();
     });
   });
 });

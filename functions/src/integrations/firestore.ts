@@ -1,7 +1,12 @@
 import { getApps, initializeApp, App } from "firebase-admin/app";
-import { getFirestore, Firestore } from "firebase-admin/firestore";
 import {
-  AiCallLogDocument,
+  getFirestore,
+  Firestore,
+  Timestamp,
+  FieldValue,
+} from "firebase-admin/firestore";
+import {
+  LogDocument,
   RateWindowConfig,
   ProviderRateState,
   RateWindowState,
@@ -9,6 +14,7 @@ import {
   QuestItem,
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
+import { evaluateRateWindow } from "../utils/rateLimit";
 
 /**
  * Initialize the Admin SDK once at module load (runs at cold start, before any
@@ -29,7 +35,7 @@ function getDb(): Firestore {
 }
 
 // ------------------------------
-// AI-call logging (ai_call_logs)
+// Pipeline-stage logging (logs)
 // ------------------------------
 
 /**
@@ -39,25 +45,25 @@ function getDb(): Firestore {
 const pendingLogWrites: Promise<unknown>[] = [];
 
 /**
- * Persist one AI call's response tagged with provider + model. Fire-and-forget:
+ * Persist one PII-free stage log (latency + AI provider/model). Fire-and-forget:
  * failures are logged and swallowed so logging can never break or delay
- * generation. Awaited later via {@link flushAiCallLogs}.
+ * generation. Awaited later via {@link flushLogs}.
  */
-export function saveAiCallLog(doc: AiCallLogDocument): void {
+export function saveLog(doc: LogDocument): void {
   const write = getDb()
-    .collection("ai_call_logs")
+    .collection("logs")
     .add(doc)
     .catch((err) => {
-      console.error("[saveAiCallLog] Failed to persist AI call log:", err);
+      console.error("[saveLog] Failed to persist log:", err);
     });
   pendingLogWrites.push(write);
 }
 
 /**
- * Await any in-flight AI-call-log writes. Call before returning the response so
- * writes land before the container can freeze. Never throws.
+ * Await any in-flight log writes. Call before returning the response so writes
+ * land before the container can freeze. Never throws.
  */
-export async function flushAiCallLogs(): Promise<void> {
+export async function flushLogs(): Promise<void> {
   const inflight = pendingLogWrites.splice(0);
   if (inflight.length) {
     await Promise.allSettled(inflight);
@@ -265,4 +271,82 @@ export async function saveDescribeResult(
       },
       { merge: true }
     );
+}
+
+// ------------------------------
+// Per-uid rate limiting (rateLimits/{uid})
+// ------------------------------
+
+const RATE_LIMITS_COLLECTION = "rateLimits";
+
+export type RateAction = "curated" | "described";
+
+function rateFieldFor(action: RateAction): string {
+  return action === "curated" ? "lastCuratedAt" : "lastDescribedAt";
+}
+
+export interface RateReservation {
+  allowed: boolean;
+  /** ISO8601 of when the next attempt is allowed (present only when denied). */
+  retryAt?: string;
+  /** Prior timestamp, for rollback on generation failure (present when allowed). */
+  previous: Timestamp | null;
+}
+
+/**
+ * Atomically reserve a per-uid, per-action 24h slot. One transaction: reads the
+ * last-used timestamp, denies (with `retryAt`) if still inside the window, else
+ * writes `now` and returns the prior value for rollback. Reserving inside the
+ * transaction closes the concurrent double-tap race. Server time only.
+ */
+export async function reserveRateLimitSlot(
+  uid: string,
+  action: RateAction
+): Promise<RateReservation> {
+  const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
+  const field = rateFieldFor(action);
+  const nowMs = Date.now();
+  return getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const prev = (
+      snap.exists ? snap.data()?.[field] : undefined
+    ) as Timestamp | undefined;
+    const result = evaluateRateWindow(prev ? prev.toMillis() : null, nowMs);
+    if (!result.allowed) {
+      return {
+        allowed: false,
+        retryAt: new Date(result.retryAtMs!).toISOString(),
+        previous: prev ?? null,
+      };
+    }
+    tx.set(ref, { [field]: Timestamp.fromMillis(nowMs) }, { merge: true });
+    return { allowed: true, previous: prev ?? null };
+  });
+}
+
+/**
+ * Best-effort restore of a rate-limit slot after a generation failure, so a
+ * server error doesn't burn the user's daily slot: restore the prior timestamp,
+ * or delete the field if it was previously unset. Never throws.
+ */
+export async function rollbackRateLimitSlot(
+  uid: string,
+  action: RateAction,
+  previous: Timestamp | null
+): Promise<void> {
+  try {
+    const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
+    const field = rateFieldFor(action);
+    await ref.set(
+      { [field]: previous ?? FieldValue.delete() },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("[rollbackRateLimitSlot] failed:", err);
+  }
+}
+
+/** Delete a user's rate-limit doc (account-deletion cleanup). */
+export async function deleteUserRateLimit(uid: string): Promise<void> {
+  await getDb().collection(RATE_LIMITS_COLLECTION).doc(uid).delete();
 }

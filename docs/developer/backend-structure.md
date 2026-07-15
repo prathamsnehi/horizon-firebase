@@ -35,7 +35,7 @@ functions/
     │
     └── integrations/            # Layer 3: External APIs & Database
         ├── maps.ts              # Google Maps Places API wrapper (getBestLocation)
-        └── firestore.ts         # Cache (user_quests), ai_call_logs, rate buckets
+        └── firestore.ts         # Cache (user_quests), logs, rate buckets
 ```
 
 _Note: the old `integrations/gemini.ts` was replaced by the multi-provider `llm/` layer._
@@ -94,7 +94,7 @@ Hardcoded values and configurations go here. For example:
 
 1. **App** calls `generateCuratedQuests`.
 2. **Controller (`controllers/quests.ts`)** validates the payload, reads `user_quests/{deviceId}` via `firestore.ts`, and computes the profile hash (`utils/hash.ts`).
-3. **Cache hit (served today):** returns the stored `servedBatch` immediately (idempotent, `timings.cached = true`). Done.
+3. **Cache hit:** returns a valid pre-generated batch immediately. Done.
 4. **Cache hit (valid `nextBatch`):** serves the pre-generated batch.
 5. **Cache miss:** calls **Service (`services/questService.ts`) → `generateBatch`**, which runs the two-pass pipeline via the **`llm/`** layer (scout → Maps `getBestLocation` → distance/transport enrich → writer → generic deficit-fill).
 6. The **Controller** persists the served batch, then **enqueues a Cloud Task** (`pregenerateCuratedBatch`) to build the next batch in the background, and returns the response.
