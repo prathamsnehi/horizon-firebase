@@ -14,7 +14,7 @@ import {
   QuestItem,
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
-import { evaluateRateWindow } from "../utils/rateLimit";
+import { evaluateReservation } from "../utils/rateLimit";
 
 /**
  * Initialize the Admin SDK once at module load (runs at cold start, before any
@@ -281,68 +281,93 @@ const RATE_LIMITS_COLLECTION = "rateLimits";
 
 export type RateAction = "curated" | "described";
 
-function rateFieldFor(action: RateAction): string {
+/** Durable "delivered" stamp — the 24h window is measured from this. */
+function lastFieldFor(action: RateAction): string {
   return action === "curated" ? "lastCuratedAt" : "lastDescribedAt";
+}
+/** Short-lived "in-flight" stamp — reserved before generation, cleared after. */
+function pendingFieldFor(action: RateAction): string {
+  return action === "curated" ? "pendingCuratedAt" : "pendingDescribedAt";
 }
 
 export interface RateReservation {
   allowed: boolean;
   /** ISO8601 of when the next attempt is allowed (present only when denied). */
   retryAt?: string;
-  /** Prior timestamp, for rollback on generation failure (present when allowed). */
-  previous: Timestamp | null;
 }
 
 /**
- * Atomically reserve a per-uid, per-action 24h slot. One transaction: reads the
- * last-used timestamp, denies (with `retryAt`) if still inside the window, else
- * writes `now` and returns the prior value for rollback. Reserving inside the
- * transaction closes the concurrent double-tap race. Server time only.
+ * Phase 1 of the crash/timeout-safe reservation. One transaction: deny if the
+ * durable 24h window is open, or if an unexpired pending reservation exists
+ * (blocks concurrent duplicates); otherwise write a fresh `pendingAt` stamp and
+ * allow. The pending stamp — NOT a durable "used" stamp — is what a killed run
+ * leaves behind; it self-expires after PENDING_TTL_MS, so no rollback is needed.
+ * Server time only.
  */
 export async function reserveRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<RateReservation> {
   const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
-  const field = rateFieldFor(action);
+  const lastField = lastFieldFor(action);
+  const pendingField = pendingFieldFor(action);
   const nowMs = Date.now();
   return getDb().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    const prev = (
-      snap.exists ? snap.data()?.[field] : undefined
-    ) as Timestamp | undefined;
-    const result = evaluateRateWindow(prev ? prev.toMillis() : null, nowMs);
+    const data = snap.exists ? snap.data() : undefined;
+    const lastTs = data?.[lastField] as Timestamp | undefined;
+    const pendingTs = data?.[pendingField] as Timestamp | undefined;
+
+    const result = evaluateReservation(
+      lastTs ? lastTs.toMillis() : null,
+      pendingTs ? pendingTs.toMillis() : null,
+      nowMs
+    );
     if (!result.allowed) {
-      return {
-        allowed: false,
-        retryAt: new Date(result.retryAtMs!).toISOString(),
-        previous: prev ?? null,
-      };
+      return { allowed: false, retryAt: new Date(result.retryAtMs!).toISOString() };
     }
-    tx.set(ref, { [field]: Timestamp.fromMillis(nowMs) }, { merge: true });
-    return { allowed: true, previous: prev ?? null };
+    tx.set(ref, { [pendingField]: Timestamp.fromMillis(nowMs) }, { merge: true });
+    return { allowed: true };
   });
 }
 
 /**
- * Best-effort restore of a rate-limit slot after a generation failure, so a
- * server error doesn't burn the user's daily slot: restore the prior timestamp,
- * or delete the field if it was previously unset. Never throws.
+ * Phase 2 (success): commit the delivery. Sets the durable `lastAt = now` (the
+ * 24h window starts here, at delivery) and clears the pending stamp. Call this
+ * only once the quests are about to be returned to the client.
  */
-export async function rollbackRateLimitSlot(
+export async function commitRateLimitSlot(
   uid: string,
-  action: RateAction,
-  previous: Timestamp | null
+  action: RateAction
 ): Promise<void> {
-  try {
-    const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
-    const field = rateFieldFor(action);
-    await ref.set(
-      { [field]: previous ?? FieldValue.delete() },
+  await getDb()
+    .collection(RATE_LIMITS_COLLECTION)
+    .doc(uid)
+    .set(
+      {
+        [lastFieldFor(action)]: Timestamp.now(),
+        [pendingFieldFor(action)]: FieldValue.delete(),
+      },
       { merge: true }
     );
+}
+
+/**
+ * Phase 2 (failure): best-effort clear of the pending stamp so a failed run
+ * frees the slot immediately. If the process dies before this runs, the pending
+ * stamp self-expires within PENDING_TTL_MS instead. Never throws.
+ */
+export async function releaseRateLimitSlot(
+  uid: string,
+  action: RateAction
+): Promise<void> {
+  try {
+    await getDb()
+      .collection(RATE_LIMITS_COLLECTION)
+      .doc(uid)
+      .set({ [pendingFieldFor(action)]: FieldValue.delete() }, { merge: true });
   } catch (err) {
-    console.error("[rollbackRateLimitSlot] failed:", err);
+    console.error("[releaseRateLimitSlot] failed:", err);
   }
 }
 

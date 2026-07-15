@@ -15,8 +15,9 @@ import { RateWindowConfig } from "../types";
  *
  * Sources (official docs, mid-2026):
  *  - Groq:     https://console.groq.com/docs/rate-limits
- *      llama-3.1-8b-instant   → 30 RPM, 14,400 RPD, 6K TPM, 500K TPD
- *      llama-3.3-70b-versatile→ 30 RPM,  1,000 RPD, 12K TPM, 100K TPD
+ *      openai/gpt-oss-20b   → 30 RPM, 1,000 RPD, 8K TPM, 200K TPD
+ *      openai/gpt-oss-120b  → 30 RPM, 1,000 RPD, 8K TPM, 200K TPD
+ *      (llama-3.x models dropped — they don't support json_schema structured output)
  *  - Gemini:   from the project's AI Studio rate-limit dashboard (authoritative)
  *      gemini-3.1-flash-lite  → 15 RPM,  500 RPD, 250K TPM
  *      gemini-3.5-flash       →  5 RPM,   20 RPD, 250K TPM  (RPD is tiny — failover critical)
@@ -42,12 +43,12 @@ export const MODEL_RATE_LIMITS: Record<string, RateWindowConfig[]> = {
     { kind: "rpd", limit: 18, windowMs: 86_400_000, strategy: "fixed" },
   ],
 
-  // --- Groq ---
-  "groq:llama-3.1-8b-instant": [
+  // --- Groq (gpt-oss models: 30 RPM, 1K RPD each; token limits not modeled) ---
+  "groq:openai/gpt-oss-20b": [
     { kind: "rpm", limit: 27, windowMs: 60_000, strategy: "bucket" },
-    { kind: "rpd", limit: 13_000, windowMs: 86_400_000, strategy: "fixed" },
+    { kind: "rpd", limit: 900, windowMs: 86_400_000, strategy: "fixed" },
   ],
-  "groq:llama-3.3-70b-versatile": [
+  "groq:openai/gpt-oss-120b": [
     { kind: "rpm", limit: 27, windowMs: 60_000, strategy: "bucket" },
     { kind: "rpd", limit: 900, windowMs: 86_400_000, strategy: "fixed" },
   ],

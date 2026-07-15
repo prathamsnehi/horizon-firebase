@@ -77,21 +77,21 @@ export const MODEL_CLASSES: Record<ModelClassName, ModelCandidate[]> = {
       modelId: "gemini-3.1-flash-lite",
       providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     },
-    { providerId: "groq", modelId: "llama-3.1-8b-instant" },
+    { providerId: "groq", modelId: "openai/gpt-oss-20b" },
     { providerId: "mistral", modelId: "mistral-small-latest" },
     { providerId: "cerebras", modelId: "gpt-oss-120b" },
   ],
   // Quality writing of the final quests.
   writer: [
     { providerId: "gemini", modelId: "gemini-3.5-flash" },
-    { providerId: "groq", modelId: "llama-3.3-70b-versatile" },
+    { providerId: "groq", modelId: "openai/gpt-oss-120b" },
     { providerId: "mistral", modelId: "mistral-medium-latest" },
     { providerId: "cerebras", modelId: "gpt-oss-120b" },
   ],
   // Location-agnostic fallback quests (same quality tier as the writer).
   generic: [
     { providerId: "gemini", modelId: "gemini-3.5-flash" },
-    { providerId: "groq", modelId: "llama-3.3-70b-versatile" },
+    { providerId: "groq", modelId: "openai/gpt-oss-120b" },
     { providerId: "mistral", modelId: "mistral-medium-latest" },
     { providerId: "cerebras", modelId: "gpt-oss-120b" },
   ],
