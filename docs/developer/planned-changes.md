@@ -14,10 +14,10 @@ The routing layer itself is in place; these are the open items around it.
 
 - **Confirm rate limits (per-model).** [rateLimits.ts](../../functions/src/llm/rateLimits.ts) is keyed per model (`provider:model`) with safety-margined values from official docs (Groq/Gemini/Cerebras); Gemini numbers are mapped from the flash/flash-lite classes (confirm the 3.x names in the AI Studio dashboard), and Mistral RPM is unpublished/conservative. Verify each and tune.
 - **Confirm free-tier model IDs + eval quality.** [models.ts](../../functions/src/llm/models.ts) candidate model IDs churn — validate they exist on each provider's current catalog, and eval quality per provider before trusting the rotation (heterogeneous models = variable output quality).
-- **Wire the load dashboard.** Enable AI SDK OpenTelemetry → Langfuse, and/or the Firestore→BigQuery→Looker Studio path on `ai_call_logs`.
+- **Wire the load dashboard.** Enable AI SDK OpenTelemetry → Langfuse, and/or the Firestore→BigQuery→Looker Studio path on the `logs` collection (PII-free: stage/provider/model/latency).
 - **Precise token (TPM/TPD) accounting** — currently only request-count windows (rpm/rpd) are modeled; token-limit 429s lean on `penalizeRateKey`.
 - **Shard the `llm_rate_buckets/global` doc** if single-doc write contention becomes a bottleneck (distributed-counter pattern).
-- **`ai_call_logs` retention/TTL + sampling** once write volume matters.
+- **`logs` retention/TTL + sampling** once write volume matters.
 - **Add more providers** (e.g. an OpenRouter free-model pool) if broader fallback breadth is ever needed — trivial via the AI SDK.
 
 ---

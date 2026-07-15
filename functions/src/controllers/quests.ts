@@ -4,19 +4,28 @@ import {
   CuratedQuestRequest,
   DescribedQuestRequest,
   QuestResponse,
-  QuestTimings,
   DescribedQuestResponse,
   QuestItem,
   PregenTaskPayload,
 } from "../types";
-import { LogContext } from "../llm";
-import { generateBatch, generateDescribed } from "../services/questService";
+import {
+  generateBatch,
+  generateDescribed,
+  attachQuestPhotos,
+} from "../services/questService";
 import { hashProfile } from "../utils/hash";
 import {
-  flushAiCallLogs,
+  validateProfilePayload,
+  validateDescribePrompt,
+  validateExcludeTitles,
+} from "../utils/validation";
+import {
+  flushLogs,
   getUserQuestState,
   saveServedBatch,
   saveDescribeResult,
+  reserveRateLimitSlot,
+  rollbackRateLimitSlot,
   dateKey,
 } from "../integrations/firestore";
 import {
@@ -37,27 +46,6 @@ const LLM_SECRETS = [
   mistralApiKey,
   cerebrasApiKey,
 ];
-
-/**
- * Module-level flag for cold-start detection. Module scope is evaluated once
- * per container; the first invocation sees `false` (it paid the boot cost).
- */
-let isWarm = false;
-
-function validateCuratedRequest(data: any): data is CuratedQuestRequest {
-  if (!data || typeof data !== "object") return false;
-  if (!data.profile || typeof data.profile !== "object") return false;
-  if (typeof data.deviceId !== "string") return false;
-  return true;
-}
-
-function validateDescribedRequest(data: any): data is DescribedQuestRequest {
-  if (!data || typeof data !== "object") return false;
-  if (typeof data.prompt !== "string" || data.prompt.trim().length === 0) return false;
-  if (!data.profile || typeof data.profile !== "object") return false;
-  if (typeof data.deviceId !== "string") return false;
-  return true;
-}
 
 /**
  * Lightweight moderation for the freeform describe prompt. v1: reject obviously
@@ -99,27 +87,44 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
 export const generateCuratedQuests = functions.https.onCall(
   { enforceAppCheck: true, secrets: LLM_SECRETS },
   async (request): Promise<QuestResponse> => {
-    if (!validateCuratedRequest(request.data)) {
+    // A: require authentication (App Check is enforced by the runtime).
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Sign in to generate quests."
+      );
+    }
+    const uid = request.auth.uid;
+
+    // C: validate structure + content before any spend or slot reservation.
+    const data = request.data as CuratedQuestRequest;
+    if (!data || typeof data !== "object" || typeof data.deviceId !== "string") {
       throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
     }
-    const { profile, deviceId, excludeTitles } = request.data as CuratedQuestRequest;
-    const logCtx: LogContext = { deviceId, profile };
+    const profileErr = validateProfilePayload(data.profile);
+    if (profileErr) throw new functions.https.HttpsError("invalid-argument", profileErr);
+    const excludeErr = validateExcludeTitles(data.excludeTitles);
+    if (excludeErr) throw new functions.https.HttpsError("invalid-argument", excludeErr);
 
-    const serverStart = Date.now();
-    const coldStart = !isWarm;
-    isWarm = true;
+    const { profile, deviceId, excludeTitles } = data;
+
+    // B: reserve the per-uid 24h curated slot (transactional, server time).
+    const reservation = await reserveRateLimitSlot(uid, "curated");
+    if (!reservation.allowed) {
+      throw new functions.https.HttpsError(
+        "resource-exhausted",
+        "You've used today's curated quest. Come back tomorrow.",
+        { retryAt: reservation.retryAt, scope: "curated" }
+      );
+    }
 
     try {
       const today = dateKey();
       const hash = hashProfile(profile);
       const state = await getUserQuestState(deviceId);
 
-      // NOTE: No per-user daily cap during the testing phase — every call
-      // generates (or serves a valid pre-generated batch). If usage limiting is
-      // needed later it will be enforced client-side. The caching / pre-gen
-      // below is a cost optimization, not a rate limit.
-
-      // Serve a valid pre-generated batch, else generate synchronously.
+      // Serve a valid pre-generated batch, else generate synchronously. Caching
+      // and pre-gen are a cost optimization, not a rate limit.
       const nextValid =
         !!state?.nextBatch?.length &&
         state.nextBatchHash === hash &&
@@ -127,37 +132,31 @@ export const generateCuratedQuests = functions.https.onCall(
         Date.now() - state.nextBatchCreatedAt < BATCH_TTL_MS;
 
       let batch: QuestItem[];
-      let stageTimings = { scoutMs: 0, mapsMs: 0, writerMs: 0, genericFallbackMs: 0 };
-      let cached = false;
+      const cached = nextValid;
 
       if (nextValid) {
         batch = state!.nextBatch!;
-        cached = true;
       } else {
-        const result = await generateBatch(
-          profile,
-          CURATED_BATCH_SIZE,
-          excludeTitles ?? [],
-          logCtx
-        );
-        batch = result.quests;
-        stageTimings = result.stageTimings;
-        await flushAiCallLogs();
+        batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
       }
 
-      // Persist today's served batch (clears the consumed next batch)...
+      // Persist today's served batch (references only — clears the consumed
+      // next batch)...
       await saveServedBatch(deviceId, batch, today);
       // ...and queue up the next one so tomorrow is instant.
       await enqueuePregen({ deviceId, profile });
+      // Flush the best-effort stage logs before the container can freeze.
+      await flushLogs();
 
-      const timings: QuestTimings = {
-        ...stageTimings,
-        totalServerMs: Date.now() - serverStart,
-        coldStart,
-        cached,
-      };
-      return { quests: batch, timings };
+      console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cached})`);
+
+      // Embed hero-image bytes for the response ONLY, after persisting (so the
+      // stored/cached batch stays reference-only and under Firestore's 1MB cap).
+      const responseBatch = await attachQuestPhotos(batch);
+      return { quests: responseBatch };
     } catch (error) {
+      // Generation failed — release the reserved slot so the user isn't penalized.
+      await rollbackRateLimitSlot(uid, "curated", reservation.previous);
       console.error("[generateCuratedQuests] Fatal error:", error);
       throw new functions.https.HttpsError(
         "internal",
@@ -176,17 +175,29 @@ export const generateCuratedQuests = functions.https.onCall(
 export const generateUserDescribedQuest = functions.https.onCall(
   { enforceAppCheck: true, secrets: LLM_SECRETS },
   async (request): Promise<DescribedQuestResponse> => {
-    if (!validateDescribedRequest(request.data)) {
+    // A: require authentication (App Check is enforced by the runtime).
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Sign in to generate quests."
+      );
+    }
+    const uid = request.auth.uid;
+
+    // C: validate structure + content before any spend or slot reservation.
+    const data = request.data as DescribedQuestRequest;
+    if (!data || typeof data !== "object" || typeof data.deviceId !== "string") {
       throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
     }
-    const { prompt, profile, deviceId } = request.data as DescribedQuestRequest;
-    const logCtx: LogContext = { deviceId, profile };
+    const promptErr = validateDescribePrompt(data.prompt);
+    if (promptErr) throw new functions.https.HttpsError("invalid-argument", promptErr);
+    const profileErr = validateProfilePayload(data.profile);
+    if (profileErr) throw new functions.https.HttpsError("invalid-argument", profileErr);
 
-    const today = dateKey();
+    const prompt = data.prompt.trim();
+    const { profile, deviceId } = data;
 
-    // NOTE: No per-user daily cap during the testing phase — every call
-    // generates. If usage limiting is needed later it will be enforced
-    // client-side. Moderation still applies.
+    // Moderation — before spend and before reserving the slot.
     if (!isDescribePromptAllowed(prompt)) {
       throw new functions.https.HttpsError(
         "invalid-argument",
@@ -194,15 +205,32 @@ export const generateUserDescribedQuest = functions.https.onCall(
       );
     }
 
+    // B: reserve the per-uid 24h described slot (transactional, server time).
+    const reservation = await reserveRateLimitSlot(uid, "described");
+    if (!reservation.allowed) {
+      throw new functions.https.HttpsError(
+        "resource-exhausted",
+        "You've used today's custom quest. Come back tomorrow.",
+        { retryAt: reservation.retryAt, scope: "described" }
+      );
+    }
+
+    const today = dateKey();
     try {
-      const quest = await generateDescribed(prompt, profile, logCtx);
-      await flushAiCallLogs();
+      const quest = await generateDescribed(prompt, profile);
+      await flushLogs();
       if (!quest) {
         throw new Error("Describe generation produced no quest.");
       }
+      console.log("[generateUserDescribedQuest] served a described quest");
+      // Persist the reference-only result first, then embed the image bytes for
+      // the response (keeps the stored copy byte-free).
       await saveDescribeResult(deviceId, quest, prompt, today);
-      return { quest };
+      const [responseQuest] = await attachQuestPhotos([quest]);
+      return { quest: responseQuest };
     } catch (error) {
+      // Generation failed — release the reserved slot so the user isn't penalized.
+      await rollbackRateLimitSlot(uid, "described", reservation.previous);
       console.error("[generateUserDescribedQuest] Fatal error:", error);
       throw new functions.https.HttpsError(
         "internal",

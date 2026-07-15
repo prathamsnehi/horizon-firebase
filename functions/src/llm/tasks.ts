@@ -18,37 +18,26 @@ import {
   genericQuestsSchema,
   describePlanSchema,
 } from "./schemas";
-import { saveAiCallLog } from "../integrations/firestore";
+import { saveLog } from "../integrations/firestore";
 import { RoutingResult } from "./types";
 
 /**
- * Context needed to persist an AI-call log. Carries the full input profile so
- * logs capture exactly what drove each output (debugging). Optional on each task
- * so callers that don't want logging (e.g. tests) can skip it.
+ * Records a PII-free observability log for one routed AI call: which provider/
+ * model served, how many attempts, and latency. No profile, prompt, response,
+ * or device identifier is stored — this is only for the load/latency dashboard.
+ * Best-effort (fire-and-forget inside saveLog).
  */
-export interface LogContext {
-  deviceId: string;
-  profile: UserProfile;
-}
-
 function logCall(
   stage: "scout" | "writer" | "generic",
   result: RoutingResult<unknown>,
-  response: unknown,
-  ctx?: LogContext,
 ): void {
-  if (!ctx) return;
-  saveAiCallLog({
+  saveLog({
     stage,
     provider: result.providerUsed,
     model: result.modelUsed,
     attempts: result.attempts,
     latencyMs: result.latencyMs,
     success: true,
-    deviceId: ctx.deviceId,
-    city: ctx.profile.city,
-    profile: ctx.profile,
-    response,
     createdAt: Date.now(),
   });
 }
@@ -60,27 +49,24 @@ export async function generateLocationConcepts(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
-  ctx?: LogContext,
 ): Promise<LocationConcept[]> {
   const prompt = buildLocationConceptsPrompt(profile, count, excludeTitles);
   const result = await generateObjectWithRouting("scout", {
     schema: locationConceptsSchema,
     prompt,
   });
-  const concepts = result.object.locationConcepts ?? [];
-  logCall("scout", result, concepts, ctx);
-  return concepts;
+  logCall("scout", result);
+  return result.object.locationConcepts ?? [];
 }
 
 /**
  * Pass 2 (Writer): generate final quests using the rich location data.
  * Re-attaches the exact, untouched Maps data by assignedLocationId and marks
- * the recommended transport mode — unchanged from the original implementation.
+ * the recommended transport mode.
  */
 export async function generateQuestsWriter(
   profile: UserProfile,
   locations: LocationInformation[],
-  ctx?: LogContext,
   userIntent?: string,
 ): Promise<QuestItem[]> {
   // Inject IDs to guarantee we map the exact untouched Maps data back later.
@@ -89,18 +75,15 @@ export async function generateQuestsWriter(
     ...loc,
   }));
 
-  const prompt = buildQuestWriterPrompt(
-    profile,
-    locationsWithIds,
-    userIntent,
-  );
+  const prompt = buildQuestWriterPrompt(profile, locationsWithIds, userIntent);
   const result = await generateObjectWithRouting("writer", {
     schema: writerQuestsSchema,
     prompt,
   });
+  logCall("writer", result);
   const rawQuests = result.object.quests ?? [];
 
-  const finalQuests: QuestItem[] = rawQuests.map((sq) => {
+  return rawQuests.map((sq) => {
     const originalLocation = locationsWithIds.find(
       (l) => l.id === sq.assignedLocationId,
     );
@@ -133,9 +116,6 @@ export async function generateQuestsWriter(
       locationInformation: locationInfo,
     };
   });
-
-  logCall("writer", result, rawQuests, ctx);
-  return finalQuests;
 }
 
 /**
@@ -146,7 +126,6 @@ export async function generateGenericQuests(
   profile: UserProfile,
   count: number,
   excludeTitles: string[] = [],
-  ctx?: LogContext,
   userIntent?: string,
 ): Promise<QuestItem[]> {
   if (count <= 0) return [];
@@ -164,33 +143,28 @@ export async function generateGenericQuests(
   });
   const rawQuests = result.object.quests ?? [];
 
-  const finalQuests: QuestItem[] = rawQuests.map((sq) => ({
+  return rawQuests.map((sq) => ({
     title: sq.title,
     questDescription: sq.questDescription,
     difficulty: sq.difficulty,
     estimatedActivityMinutes: sq.estimatedActivityMinutes,
     categories: sq.categories,
   }));
-
-  logCall("generic", result, rawQuests, ctx);
-  return finalQuests;
 }
 
 /**
  * Pass 0 (Describe Planner): decide whether a user's freeform describe request
  * needs a specific real-world place (location) or is location-agnostic (generic).
- * Uses the fast "scout" model class. Logged under the "scout" stage.
+ * Uses the fast "scout" model class.
  */
 export async function planDescribedQuest(
   prompt: string,
   profile: UserProfile,
-  ctx?: LogContext,
 ): Promise<DescribePlan> {
   const plannerPrompt = buildDescribePlannerPrompt(prompt, profile);
   const result = await generateObjectWithRouting("scout", {
     schema: describePlanSchema,
     prompt: plannerPrompt,
   });
-  logCall("scout", result, result.object, ctx);
   return result.object;
 }

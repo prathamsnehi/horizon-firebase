@@ -81,10 +81,12 @@ export interface LocationInformation {
   locationDescription: string;
   latitude: number;
   longitude: number;
-  photoURL: string;
+  photoReference: string; // queryable google maps photo identifier
   googleMapsURL: string;
   distanceMiles?: number;
   transportationOptions?: TransportationOption[];
+  photoImageBase64?: string; // gmaps photo identifier -> image -> base64, attached just before returning Quest
+  photoContentType?: string; // content type of the base64 image (image/jpeg, image/png, etc)
 }
 
 export interface QuestItem {
@@ -98,24 +100,8 @@ export interface QuestItem {
   locationInformation?: LocationInformation;
 }
 
-/**
- * Per-stage server timings, attached to the response so the client can
- * record where the latency goes. Optional & additive — older/other clients
- * (e.g. iOS) simply ignore it. All values are milliseconds.
- */
-export interface QuestTimings {
-  scoutMs: number; // Pass 1: Gemini location-concept generation
-  mapsMs: number; // Google Maps resolution (parallel)
-  writerMs: number; // Pass 2: Gemini quest writing
-  genericFallbackMs: number; // Deficit-filling generic generation (0 if skipped)
-  totalServerMs: number; // Whole handler, validation → response
-  coldStart: boolean; // True if this invocation booted a fresh container
-  cached?: boolean; // True when served from cache (no generation happened)
-}
-
 export interface QuestResponse {
   quests: QuestItem[] | null;
-  timings?: QuestTimings;
 }
 
 // ------------------------------
@@ -191,22 +177,20 @@ export interface PregenTaskPayload {
 }
 
 /**
- * Represents a document in the `ai_call_logs` collection. Records the response
- * of every AI call (Scout, Writer, Generic) tagged with the provider + model
- * that served it. Inspection/debugging + raw substrate for the load dashboard.
+ * Represents a document in the `logs` collection. PII-free observability record
+ * for a single generation-pipeline stage: its latency, plus (for AI stages)
+ * which provider/model served it. The raw substrate for the load/latency
+ * dashboard. Intentionally stores NO profile, prompt, response, or device id.
  */
-export interface AiCallLogDocument {
-  stage: "scout" | "writer" | "generic";
-  provider: string; // e.g. "gemini", "groq"
-  model: string; // e.g. "gemini-3.5-flash"
-  attempts: number; // how many candidates were tried before success
-  latencyMs: number; // wall-clock of the successful call
-  success: boolean;
-  deviceId: string;
-  city: string; // denormalized from profile.city for easy dashboard grouping
-  profile: UserProfile; // full input profile that produced this output (debugging)
-  response: unknown; // the parsed structured output
+export interface LogDocument {
+  stage: "scout" | "maps" | "writer" | "generic";
+  latencyMs: number; // wall-clock of the stage
   createdAt: number; // Unix timestamp in milliseconds
+  // AI stages only:
+  provider?: string; // e.g. "gemini", "groq"
+  model?: string; // e.g. "gemini-3.5-flash"
+  attempts?: number; // how many candidates were tried before success
+  success?: boolean;
 }
 
 // ------------------------------
