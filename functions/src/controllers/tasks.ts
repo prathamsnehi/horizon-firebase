@@ -2,10 +2,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { PregenTaskPayload } from "../types";
 import { generateBatch } from "../services/questService";
 import { hashProfile } from "../utils/hash";
-import {
-  flushLogs,
-  savePregeneratedBatch,
-} from "../integrations/firestore";
+import { flushLogs, savePregeneratedBatch } from "../integrations/firestore";
 import {
   geminiApiKey,
   placesApiKey,
@@ -23,9 +20,16 @@ import {
  */
 export const pregenerateCuratedBatch = onTaskDispatched(
   {
-    secrets: [geminiApiKey, placesApiKey, groqApiKey, mistralApiKey, cerebrasApiKey],
+    secrets: [
+      geminiApiKey,
+      placesApiKey,
+      groqApiKey,
+      mistralApiKey,
+      cerebrasApiKey,
+    ],
     retryConfig: { maxAttempts: 2 },
-    rateLimits: { maxConcurrentDispatches: 5 },
+    rateLimits: { maxConcurrentDispatches: 5 }, // workers allowed to run in parallel, doesn't limit the queue
+    timeoutSeconds: 120, // same two-pass generation as the callables
   },
   async (request) => {
     const { deviceId, profile } = request.data as PregenTaskPayload;
@@ -38,9 +42,11 @@ export const pregenerateCuratedBatch = onTaskDispatched(
       const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
       await savePregeneratedBatch(deviceId, quests, hashProfile(profile));
       await flushLogs();
-      console.log(`[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`);
+      console.log(
+        `[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`,
+      );
     } catch (err) {
       console.error("[pregenerateCuratedBatch] Failed:", err);
     }
-  }
+  },
 );

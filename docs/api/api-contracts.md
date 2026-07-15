@@ -162,8 +162,8 @@ Errors are surfaced as Firebase `HttpsError`, so the client receives a standard 
 
 - `unauthenticated` — no signed-in Firebase Auth user. Message: "Sign in to generate quests."
 - `invalid-argument` — the payload failed validation (missing/malformed fields, oversized/empty prompt), or a described prompt was blocked by moderation. The message text is user-surfaceable.
-- `resource-exhausted` — the per-user 24h rate limit was hit. Carries a **`details`** object: `{ retryAt: <ISO8601>, scope: "curated" | "described" }`. The message is a friendly "come back tomorrow"; the client reads `details.retryAt` for its countdown.
-- `internal` — generation failed downstream (e.g., Scout produced no concepts, or the Writer produced nothing). Show a retry button. A failed generation does **not** consume the daily slot.
+- `resource-exhausted` — the lane is currently gated. Carries a **`details`** object: `{ retryAt: <ISO8601>, scope: "curated" | "described" }`. The client just reads `details.retryAt` and counts down to it — the value is either the full 24h gate (after a successful delivery) **or** a short ≤2.5-min cooldown (a generation is in flight, or a previous one failed/was killed). Same shape either way.
+- `internal` — generation failed downstream (e.g., Scout produced no concepts, or the Writer produced nothing). Show a retry button. A failed generation does **not** consume the 24h slot — its short pending cooldown clears (or self-expires) and a retry then succeeds.
 
 _Both callables enforce **App Check** (`enforceAppCheck: true`) **and** require a signed-in Firebase Auth user. App Check failures are rejected by Firebase before the handler runs; the missing-auth check is the first thing the handler does._
 
@@ -171,12 +171,19 @@ The client should also handle transport-level failures (no network) as its own o
 
 ## Rate Limiting
 
-Enforced **server-side**, per **`request.auth.uid`** (the verified Firebase Auth token — never a payload field, which is spoofable), on a **24h rolling window** using **server time**:
+Enforced **server-side**, per **`request.auth.uid`** (the verified Firebase Auth token — never a payload field, which is spoofable), on a **24h window** using **server time**. One *delivered* generation per lane per 24h:
 
 - `generateCuratedQuests` — **1 per 24h**.
-- `generateUserDescribedQuest` — **1 per 24h**, independent window.
+- `generateUserDescribedQuest` — **1 per 24h**, independent lane.
 
-State lives in `rateLimits/{uid}` (`lastCuratedAt` / `lastDescribedAt` timestamps). The slot is **reserved inside a Firestore transaction before generation** (so two concurrent calls can't both pass — exactly one wins, the other gets `resource-exhausted`), and **rolled back if generation fails** (a server error never burns the user's daily slot). On denial the handler throws `resource-exhausted` with `details.retryAt` (ISO8601 of `lastAt + 24h`) and `details.scope`.
+**Crash/timeout-safe two-phase reservation** (state in `rateLimits/{uid}`):
+
+- **Durable stamp** `lastCuratedAt`/`lastDescribedAt` — the 24h window is measured from here, and it's set **only on successful delivery** (at commit, right before the response is returned).
+- **Pending stamp** `pendingCuratedAt`/`pendingDescribedAt` — written inside a transaction *before* generation. A concurrent call, or a retry within **~2.5 min (150s)**, is denied against it (this is what blocks duplicates).
+- On **success**: commit — set `lastAt = now`, clear the pending stamp → the 24h window starts at delivery.
+- On **failure**: best-effort clear the pending stamp (frees immediately). **If the process is killed** (e.g. the platform timeout), the pending stamp simply self-expires within 150s — no rollback code has to run.
+
+Why: the old reserve-then-rollback burned the full day if a >60s generation was killed before rollback could run. Now a killed run costs the user **at most ~2.5 min**, and the 24h gate only exists once quests actually landed. Function timeout is **120s** (150s pending TTL stays ≥ the timeout so a still-running generation can't be double-entered).
 
 _`deviceId` remains the **pre-generation cache key only** — it is not an identity and is never used for rate limiting._
 

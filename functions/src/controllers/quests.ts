@@ -25,7 +25,8 @@ import {
   saveServedBatch,
   saveDescribeResult,
   reserveRateLimitSlot,
-  rollbackRateLimitSlot,
+  commitRateLimitSlot,
+  releaseRateLimitSlot,
   dateKey,
 } from "../integrations/firestore";
 import {
@@ -85,7 +86,7 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
  * (CURATED_BATCH_SIZE); the request carries only { profile, deviceId, excludeTitles? }.
  */
 export const generateCuratedQuests = functions.https.onCall(
-  { enforceAppCheck: true, secrets: LLM_SECRETS },
+  { enforceAppCheck: true, secrets: LLM_SECRETS, timeoutSeconds: 120 },
   async (request): Promise<QuestResponse> => {
     // A: require authentication (App Check is enforced by the runtime).
     if (!request.auth) {
@@ -153,10 +154,16 @@ export const generateCuratedQuests = functions.https.onCall(
       // Embed hero-image bytes for the response ONLY, after persisting (so the
       // stored/cached batch stays reference-only and under Firestore's 1MB cap).
       const responseBatch = await attachQuestPhotos(batch);
+
+      // Commit LAST (quests are landing): starts the 24h window at delivery and
+      // clears the pending stamp. A timeout before this leaves only the pending
+      // stamp, which self-expires in ≤150s — no burned day.
+      await commitRateLimitSlot(uid, "curated");
       return { quests: responseBatch };
     } catch (error) {
-      // Generation failed — release the reserved slot so the user isn't penalized.
-      await rollbackRateLimitSlot(uid, "curated", reservation.previous);
+      // Generation failed — free the pending slot immediately (best-effort; a
+      // process death would let it self-expire within 150s instead).
+      await releaseRateLimitSlot(uid, "curated");
       console.error("[generateCuratedQuests] Fatal error:", error);
       throw new functions.https.HttpsError(
         "internal",
@@ -173,7 +180,7 @@ export const generateCuratedQuests = functions.https.onCall(
  * DIFFERENT prompt the same day is rejected as rate-limited.
  */
 export const generateUserDescribedQuest = functions.https.onCall(
-  { enforceAppCheck: true, secrets: LLM_SECRETS },
+  { enforceAppCheck: true, secrets: LLM_SECRETS, timeoutSeconds: 120 },
   async (request): Promise<DescribedQuestResponse> => {
     // A: require authentication (App Check is enforced by the runtime).
     if (!request.auth) {
@@ -227,10 +234,14 @@ export const generateUserDescribedQuest = functions.https.onCall(
       // the response (keeps the stored copy byte-free).
       await saveDescribeResult(deviceId, quest, prompt, today);
       const [responseQuest] = await attachQuestPhotos([quest]);
+
+      // Commit LAST (quest is landing): starts the 24h window at delivery.
+      await commitRateLimitSlot(uid, "described");
       return { quest: responseQuest };
     } catch (error) {
-      // Generation failed — release the reserved slot so the user isn't penalized.
-      await rollbackRateLimitSlot(uid, "described", reservation.previous);
+      // Generation failed — free the pending slot immediately (best-effort; a
+      // process death would let it self-expire within 150s instead).
+      await releaseRateLimitSlot(uid, "described");
       console.error("[generateUserDescribedQuest] Fatal error:", error);
       throw new functions.https.HttpsError(
         "internal",
