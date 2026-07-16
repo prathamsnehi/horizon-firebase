@@ -3,10 +3,7 @@ import { z } from "zod";
 import { ModelClassName, RoutingResult, RoutingAttempt } from "./types";
 import { MODEL_CLASSES, resolveModel, rateKeyFor } from "./models";
 import { MODEL_RATE_LIMITS } from "./rateLimits";
-import {
-  reserveLlmToken,
-  penalizeRateKey,
-} from "../integrations/firestore";
+import { reserveLlmToken, penalizeRateKey } from "../integrations/firestore";
 
 /**
  * Classify an error as "try the next provider" — rate limits, transient server
@@ -38,7 +35,7 @@ export interface RoutingOptions<T> {
  */
 export async function generateObjectWithRouting<T>(
   className: ModelClassName,
-  opts: RoutingOptions<T>
+  opts: RoutingOptions<T>,
 ): Promise<RoutingResult<T>> {
   const candidates = MODEL_CLASSES[className];
   const candidateKeys = candidates.map(rateKeyFor);
@@ -46,7 +43,7 @@ export async function generateObjectWithRouting<T>(
   // Global, rate-aware ordering (per model). Fails open to static priority order.
   const order = await reserveLlmToken(candidateKeys, MODEL_RATE_LIMITS);
   const ordered = [...candidates].sort(
-    (a, b) => order.indexOf(rateKeyFor(a)) - order.indexOf(rateKeyFor(b))
+    (a, b) => order.indexOf(rateKeyFor(a)) - order.indexOf(rateKeyFor(b)),
   );
 
   let attempts = 0;
@@ -61,6 +58,10 @@ export async function generateObjectWithRouting<T>(
         model: resolveModel(candidate),
         schema: opts.schema,
         prompt: opts.prompt,
+        // One shot per model: we do cross-provider failover ourselves (plus
+        // penalizeRateKey), so the SDK's built-in retry (default 2 = 3 tries
+        // with backoff) would just hammer a down model before we fail over.
+        maxRetries: 0,
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
         ...(candidate.providerOptions
           ? { providerOptions: candidate.providerOptions as any }
@@ -99,6 +100,6 @@ export async function generateObjectWithRouting<T>(
   }
 
   throw new Error(
-    `[llm.router] All ${className} providers failed: ${errors.join(" | ")}`
+    `[llm.router] All ${className} providers failed: ${errors.join(" | ")}`,
   );
 }
