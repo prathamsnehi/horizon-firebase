@@ -71,6 +71,29 @@ export async function flushLogs(): Promise<void> {
 }
 
 // ------------------------------
+// End-to-end request tracing (debug_logs) — TEST BRANCH ONLY
+// ------------------------------
+
+const DEBUG_LOGS_COLLECTION = "debug_logs";
+
+/**
+ * Persist one end-to-end trace document (built by the tracer). Awaited by the
+ * tracer at request end, so it's a single write that lands before the container
+ * can freeze. Never throws — a tracing failure must not affect the request.
+ * Takes a plain object to avoid a type cycle with the tracer module.
+ */
+export async function saveTrace(doc: Record<string, unknown>): Promise<void> {
+  try {
+    // A JSON round-trip strips `undefined` (which Firestore rejects) and any
+    // non-plain values from the arbitrary captured input/output objects.
+    const safe = JSON.parse(JSON.stringify(doc));
+    await getDb().collection(DEBUG_LOGS_COLLECTION).add(safe);
+  } catch (err) {
+    console.error("[saveTrace] Failed to persist trace:", err);
+  }
+}
+
+// ------------------------------
 // Global rate distribution (llm_rate_buckets/global)
 // ------------------------------
 

@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { ModelClassName, RoutingResult } from "./types";
+import { ModelClassName, RoutingResult, RoutingAttempt } from "./types";
 import { MODEL_CLASSES, resolveModel, rateKeyFor } from "./models";
 import { MODEL_RATE_LIMITS } from "./rateLimits";
 import {
@@ -51,6 +51,7 @@ export async function generateObjectWithRouting<T>(
 
   let attempts = 0;
   const errors: string[] = [];
+  const attemptLog: RoutingAttempt[] = [];
 
   for (const candidate of ordered) {
     attempts++;
@@ -65,17 +66,31 @@ export async function generateObjectWithRouting<T>(
           ? { providerOptions: candidate.providerOptions as any }
           : {}),
       });
+      attemptLog.push({
+        provider: candidate.providerId,
+        model: candidate.modelId,
+        ok: true,
+        latencyMs: Date.now() - start,
+      });
       return {
         object: object as T,
         providerUsed: candidate.providerId,
         modelUsed: candidate.modelId,
         attempts,
         latencyMs: Date.now() - start,
+        attemptLog,
       };
     } catch (err: any) {
       const msg = `${candidate.providerId}/${candidate.modelId}: ${err?.message ?? err}`;
       console.error(`[llm.router] ${className} attempt failed — ${msg}`);
       errors.push(msg);
+      attemptLog.push({
+        provider: candidate.providerId,
+        model: candidate.modelId,
+        ok: false,
+        latencyMs: Date.now() - start,
+        error: String(err?.message ?? err),
+      });
       if (isRetryable(err)) {
         // Drain this model's buckets so subsequent calls route elsewhere.
         void penalizeRateKey(rateKeyFor(candidate));

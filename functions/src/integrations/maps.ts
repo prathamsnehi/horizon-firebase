@@ -125,7 +125,7 @@ export async function getBestLocation(
  */
 export async function fetchPlacePhotoBytes(
   photoReference: string,
-): Promise<{ base64: string; contentType: string } | null> {
+): Promise<{ base64: string; contentType: string; bytes: number } | null> {
   if (!isValidPhotoReference(photoReference)) return null;
 
   const url = `https://places.googleapis.com/v1/${photoReference}/media?key=${placesApiKey.value()}&maxHeightPx=600`;
@@ -137,8 +137,8 @@ export async function fetchPlacePhotoBytes(
       return null;
     }
     const contentType = res.headers.get("content-type") || "image/jpeg";
-    const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-    return { base64, contentType };
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { base64: buffer.toString("base64"), contentType, bytes: buffer.length };
   } catch (err) {
     console.error("[fetchPlacePhotoBytes] failed:", err);
     return null;

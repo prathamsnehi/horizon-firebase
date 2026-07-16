@@ -218,6 +218,7 @@ describe("Maps Integration", () => {
       expect(result).toEqual({
         base64: Buffer.from("hello").toString("base64"),
         contentType: "image/png",
+        bytes: 5,
       });
     });
 

@@ -12,6 +12,7 @@ import {
 } from "../llm";
 import { getBestLocation, fetchPlacePhotoBytes } from "../integrations/maps";
 import { saveLog } from "../integrations/firestore";
+import { span, recordSpan } from "../observability/tracer";
 import {
   calculateDistanceMiles,
   calculateAllTransportOptions,
@@ -81,7 +82,15 @@ export async function generateBatch(
   // --- STEP 2: LOCATION RESOLUTION (parallel; latency logged) ---
   const tMaps = Date.now();
   const rawMapsResults = await Promise.all(
-    locationConcepts.map((concept) => getBestLocation(concept.textQuery))
+    locationConcepts.map((concept) =>
+      span("maps.resolve", () => getBestLocation(concept.textQuery), {
+        input: { textQuery: concept.textQuery },
+        onResult: (loc) => ({
+          output: { resolved: loc },
+          meta: { hit: loc !== null },
+        }),
+      })
+    )
   );
   saveLog({ stage: "maps", latencyMs: Date.now() - tMaps, createdAt: Date.now() });
   const validLocations = rawMapsResults.filter(
@@ -89,7 +98,17 @@ export async function generateBatch(
   );
 
   // --- STEP 3: DISTANCE & TRANSPORT MATH ---
+  const tEnrich = Date.now();
   const enrichedLocations = enrichLocations(profile, validLocations);
+  recordSpan("enrich", {
+    latencyMs: Date.now() - tEnrich,
+    input: {
+      count: validLocations.length,
+      hasCityCoords:
+        profile.cityLatitude != null && profile.cityLongitude != null,
+    },
+    output: { locations: enrichedLocations },
+  });
 
   // --- PASS 4: WRITER ---
   const finalQuests: QuestItem[] = [];
@@ -100,8 +119,9 @@ export async function generateBatch(
   // --- STEP 4.5: GENERIC FALLBACK (deficit filling) ---
   const deficit = count - finalQuests.length;
   if (deficit > 0) {
+    const reason = `deficit=${deficit} (writer produced ${finalQuests.length} of ${count}; resolved ${validLocations.length}/${locationConcepts.length} locations)`;
     finalQuests.push(
-      ...(await generateGenericQuests(profile, deficit, excludeTitles))
+      ...(await generateGenericQuests(profile, deficit, excludeTitles, undefined, reason))
     );
   }
 
@@ -124,17 +144,28 @@ export async function generateDescribed(
 ): Promise<QuestItem | null> {
   const plan = await planDescribedQuest(prompt, profile);
 
+  let genericReason = "plan=generic (planner chose location-agnostic)";
   if (plan.mode === "location" && plan.textQuery) {
-    const loc = await getBestLocation(plan.textQuery);
+    const loc = await span(
+      "maps.resolve",
+      () => getBestLocation(plan.textQuery!),
+      {
+        input: { textQuery: plan.textQuery },
+        onResult: (l) => ({ output: { resolved: l }, meta: { hit: l !== null } }),
+      }
+    );
     if (loc) {
       const enriched = enrichLocations(profile, [loc]);
       const items = await generateQuestsWriter(profile, enriched, prompt);
       if (items.length > 0) return items[0];
+      genericReason = "writer produced 0 quests for the resolved location";
+    } else {
+      genericReason = `maps unresolved for textQuery "${plan.textQuery}"`;
     }
-    // Maps couldn't resolve — fall through to a generic quest.
+    // Maps/Writer couldn't produce — fall through to a generic quest.
   }
 
-  const generic = await generateGenericQuests(profile, 1, [], prompt);
+  const generic = await generateGenericQuests(profile, 1, [], prompt, genericReason);
   return generic[0] ?? null;
 }
 
@@ -150,14 +181,28 @@ export async function generateDescribed(
 export async function attachQuestPhotos(
   quests: QuestItem[]
 ): Promise<QuestItem[]> {
-  return Promise.all(
+  const tPhotos = Date.now();
+  // Per-quest photo outcomes for the trace — size/contentType only, NEVER the
+  // base64 bytes (would blow past Firestore's 1MB doc limit, same as the cache).
+  const photoLog: Array<Record<string, unknown>> = [];
+
+  const result = await Promise.all(
     quests.map(async (quest) => {
       const ref = quest.locationInformation?.photoReference;
       if (!ref) return quest;
 
       const photo = await fetchPlacePhotoBytes(ref);
-      if (!photo) return quest;
+      if (!photo) {
+        photoLog.push({ photoReference: ref, ok: false });
+        return quest;
+      }
 
+      photoLog.push({
+        photoReference: ref,
+        ok: true,
+        bytes: photo.bytes,
+        contentType: photo.contentType,
+      });
       return {
         ...quest,
         locationInformation: {
@@ -168,4 +213,10 @@ export async function attachQuestPhotos(
       };
     })
   );
+
+  recordSpan("photos.attach", {
+    latencyMs: Date.now() - tPhotos,
+    meta: { photos: photoLog },
+  });
+  return result;
 }
