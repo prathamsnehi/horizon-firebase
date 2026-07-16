@@ -60,6 +60,7 @@ export async function generateObjectWithRouting<T>(
         model: resolveModel(candidate),
         schema: opts.schema,
         prompt: opts.prompt,
+        maxRetries: 0,
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
         ...(candidate.providerOptions
           ? { providerOptions: candidate.providerOptions as any }
