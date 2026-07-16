@@ -10,7 +10,7 @@ import {
   RateWindowConfig,
   ProviderRateState,
   RateWindowState,
-  UserQuestStateDocument,
+  PregenCacheDocument,
   QuestItem,
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
@@ -186,49 +186,23 @@ export async function penalizeRateKey(rateKey: string): Promise<void> {
 }
 
 // ------------------------------
-// Per-user quest cache + daily usage (user_quests/{deviceId})
+// Pre-generation cache (pregen_cache/{deviceId})
 // ------------------------------
+// Ephemeral, regenerable cache of the next curated batch per device. NOT a
+// durable store of user data — it holds only a pre-generated batch that the
+// next request serves instantly, then discards.
 
-const USER_QUESTS_COLLECTION = "user_quests";
+const PREGEN_CACHE_COLLECTION = "pregen_cache";
 
-/** Current UTC date as "YYYY-MM-DD" — the daily-reset key. */
-export function dateKey(now: number = Date.now()): string {
-  return new Date(now).toISOString().slice(0, 10);
-}
-
-export async function getUserQuestState(
+/** Read a device's cached pre-generated batch (if any). */
+export async function getPregenCache(
   deviceId: string
-): Promise<UserQuestStateDocument | null> {
+): Promise<PregenCacheDocument | null> {
   const snap = await getDb()
-    .collection(USER_QUESTS_COLLECTION)
+    .collection(PREGEN_CACHE_COLLECTION)
     .doc(deviceId)
     .get();
-  return snap.exists ? (snap.data() as UserQuestStateDocument) : null;
-}
-
-/**
- * Persist the batch most recently served to the user, and clear the
- * now-consumed pre-generated batch.
- */
-export async function saveServedBatch(
-  deviceId: string,
-  batch: QuestItem[],
-  date: string
-): Promise<void> {
-  await getDb()
-    .collection(USER_QUESTS_COLLECTION)
-    .doc(deviceId)
-    .set(
-      {
-        deviceId,
-        servedBatch: batch,
-        servedDate: date,
-        nextBatch: null,
-        nextBatchHash: null,
-        nextBatchCreatedAt: null,
-      },
-      { merge: true }
-    );
+  return snap.exists ? (snap.data() as PregenCacheDocument) : null;
 }
 
 /** Store a background pre-generated batch ready to serve next. */
@@ -239,7 +213,7 @@ export async function savePregeneratedBatch(
   createdAt: number = Date.now()
 ): Promise<void> {
   await getDb()
-    .collection(USER_QUESTS_COLLECTION)
+    .collection(PREGEN_CACHE_COLLECTION)
     .doc(deviceId)
     .set(
       {
@@ -252,32 +226,30 @@ export async function savePregeneratedBatch(
     );
 }
 
-/** Persist the most recently described quest (cache only). */
-export async function saveDescribeResult(
-  deviceId: string,
-  quest: QuestItem,
-  prompt: string,
-  date: string
-): Promise<void> {
+/**
+ * Invalidate a device's cached batch after it's been served, so a failed
+ * re-generation can't serve the same batch twice.
+ */
+export async function clearPregenBatch(deviceId: string): Promise<void> {
   await getDb()
-    .collection(USER_QUESTS_COLLECTION)
+    .collection(PREGEN_CACHE_COLLECTION)
     .doc(deviceId)
     .set(
       {
         deviceId,
-        describeResult: quest,
-        describePrompt: prompt,
-        describeDate: date,
+        nextBatch: null,
+        nextBatchHash: null,
+        nextBatchCreatedAt: null,
       },
       { merge: true }
     );
 }
 
 // ------------------------------
-// Per-uid rate limiting (rateLimits/{uid})
+// Per-uid rate limiting (user_rate_limits/{uid})
 // ------------------------------
 
-const RATE_LIMITS_COLLECTION = "rateLimits";
+const RATE_LIMITS_COLLECTION = "user_rate_limits";
 
 export type RateAction = "curated" | "described";
 

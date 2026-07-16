@@ -21,13 +21,11 @@ import {
 } from "../utils/validation";
 import {
   flushLogs,
-  getUserQuestState,
-  saveServedBatch,
-  saveDescribeResult,
+  getPregenCache,
+  clearPregenBatch,
   reserveRateLimitSlot,
   commitRateLimitSlot,
   releaseRateLimitSlot,
-  dateKey,
 } from "../integrations/firestore";
 import {
   geminiApiKey,
@@ -120,36 +118,36 @@ export const generateCuratedQuests = functions.https.onCall(
     }
 
     try {
-      const today = dateKey();
       const hash = hashProfile(profile);
-      const state = await getUserQuestState(deviceId);
+      const cache = await getPregenCache(deviceId);
 
-      // Serve a valid pre-generated batch, else generate synchronously. Caching
-      // and pre-gen are a cost optimization, not a rate limit.
-      const nextValid =
-        !!state?.nextBatch?.length &&
-        state.nextBatchHash === hash &&
-        !!state.nextBatchCreatedAt &&
-        Date.now() - state.nextBatchCreatedAt < BATCH_TTL_MS;
+      // A cached batch is usable only if it exists, was built for this exact
+      // profile, and hasn't gone stale. Caching/pre-gen is a cost optimization,
+      // not a rate limit — a miss just means we generate synchronously.
+      let cacheHit = false;
+      if (cache && cache.nextBatch && cache.nextBatch.length > 0) {
+        const builtForThisProfile = cache.nextBatchHash === hash;
+        const age = Date.now() - (cache.nextBatchCreatedAt ?? 0);
+        const fresh = age < BATCH_TTL_MS;
+        cacheHit = builtForThisProfile && fresh;
+      }
 
       let batch: QuestItem[];
-      const cached = nextValid;
-
-      if (nextValid) {
-        batch = state!.nextBatch!;
+      if (cacheHit) {
+        batch = cache!.nextBatch!;
       } else {
         batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
       }
 
-      // Persist today's served batch (references only — clears the consumed
-      // next batch)...
-      await saveServedBatch(deviceId, batch, today);
-      // ...and queue up the next one so tomorrow is instant.
+      // Invalidate the consumed cache entry so a failed re-gen can't re-serve
+      // the same batch...
+      await clearPregenBatch(deviceId);
+      // ...and queue up the next one so the following request is instant.
       await enqueuePregen({ deviceId, profile });
       // Flush the best-effort stage logs before the container can freeze.
       await flushLogs();
 
-      console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cached})`);
+      console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cacheHit})`);
 
       // Embed hero-image bytes for the response ONLY, after persisting (so the
       // stored/cached batch stays reference-only and under Firestore's 1MB cap).
@@ -202,7 +200,7 @@ export const generateUserDescribedQuest = functions.https.onCall(
     if (profileErr) throw new functions.https.HttpsError("invalid-argument", profileErr);
 
     const prompt = data.prompt.trim();
-    const { profile, deviceId } = data;
+    const { profile } = data;
 
     // Moderation — before spend and before reserving the slot.
     if (!isDescribePromptAllowed(prompt)) {
@@ -222,7 +220,6 @@ export const generateUserDescribedQuest = functions.https.onCall(
       );
     }
 
-    const today = dateKey();
     try {
       const quest = await generateDescribed(prompt, profile);
       await flushLogs();
@@ -230,9 +227,8 @@ export const generateUserDescribedQuest = functions.https.onCall(
         throw new Error("Describe generation produced no quest.");
       }
       console.log("[generateUserDescribedQuest] served a described quest");
-      // Persist the reference-only result first, then embed the image bytes for
-      // the response (keeps the stored copy byte-free).
-      await saveDescribeResult(deviceId, quest, prompt, today);
+      // Embed the hero-image bytes for the response (nothing to persist — a
+      // described quest is one-off and isn't cached).
       const [responseQuest] = await attachQuestPhotos([quest]);
 
       // Commit LAST (quest is landing): starts the 24h window at delivery.
