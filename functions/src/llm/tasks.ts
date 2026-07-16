@@ -19,6 +19,7 @@ import {
   describePlanSchema,
 } from "./schemas";
 import { saveLog } from "../integrations/firestore";
+import { recordSpan } from "../observability/tracer";
 import { RoutingResult } from "./types";
 
 /**
@@ -42,6 +43,20 @@ function logCall(
   });
 }
 
+/** Routing provider/model/attempts + failover chain, as trace-span meta. */
+function routingMeta(
+  result: RoutingResult<unknown>,
+  extra?: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    provider: result.providerUsed,
+    model: result.modelUsed,
+    attempts: result.attempts,
+    attemptLog: result.attemptLog,
+    ...extra,
+  };
+}
+
 /**
  * Pass 1 (Scout): generate abstract Google Maps search queries.
  */
@@ -56,7 +71,14 @@ export async function generateLocationConcepts(
     prompt,
   });
   logCall("scout", result);
-  return result.object.locationConcepts ?? [];
+  const locationConcepts = result.object.locationConcepts ?? [];
+  recordSpan("scout", {
+    latencyMs: result.latencyMs,
+    input: { prompt, count, excludeTitles },
+    output: { locationConcepts },
+    meta: routingMeta(result),
+  });
+  return locationConcepts;
 }
 
 /**
@@ -82,6 +104,12 @@ export async function generateQuestsWriter(
   });
   logCall("writer", result);
   const rawQuests = result.object.quests ?? [];
+  recordSpan("writer", {
+    latencyMs: result.latencyMs,
+    input: { prompt, locations: locationsWithIds, userIntent },
+    output: { quests: rawQuests },
+    meta: routingMeta(result),
+  });
 
   return rawQuests.map((sq) => {
     const originalLocation = locationsWithIds.find(
@@ -127,6 +155,7 @@ export async function generateGenericQuests(
   count: number,
   excludeTitles: string[] = [],
   userIntent?: string,
+  reason?: string,
 ): Promise<QuestItem[]> {
   if (count <= 0) return [];
 
@@ -142,6 +171,12 @@ export async function generateGenericQuests(
     temperature: 0.8,
   });
   const rawQuests = result.object.quests ?? [];
+  recordSpan("generic", {
+    latencyMs: result.latencyMs,
+    input: { prompt, count, excludeTitles, userIntent },
+    output: { quests: rawQuests },
+    meta: routingMeta(result, reason ? { reason } : undefined),
+  });
 
   return rawQuests.map((sq) => ({
     title: sq.title,
@@ -165,6 +200,12 @@ export async function planDescribedQuest(
   const result = await generateObjectWithRouting("scout", {
     schema: describePlanSchema,
     prompt: plannerPrompt,
+  });
+  recordSpan("planner", {
+    latencyMs: result.latencyMs,
+    input: { userPrompt: prompt, plannerPrompt },
+    output: { plan: result.object },
+    meta: routingMeta(result),
   });
   return result.object;
 }

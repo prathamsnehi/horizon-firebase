@@ -3,6 +3,7 @@ import { PregenTaskPayload } from "../types";
 import { generateBatch } from "../services/questService";
 import { hashProfile } from "../utils/hash";
 import { flushLogs, savePregeneratedBatch } from "../integrations/firestore";
+import { runTrace, setTraceField } from "../observability/tracer";
 import {
   geminiApiKey,
   placesApiKey,
@@ -38,15 +39,20 @@ export const pregenerateCuratedBatch = onTaskDispatched(
       return;
     }
 
-    try {
-      const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
-      await savePregeneratedBatch(deviceId, quests, hashProfile(profile));
-      await flushLogs();
-      console.log(
-        `[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`,
-      );
-    } catch (err) {
-      console.error("[pregenerateCuratedBatch] Failed:", err);
-    }
+    await runTrace({ type: "pregen", deviceId }, async () => {
+      try {
+        const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
+        await savePregeneratedBatch(deviceId, quests, hashProfile(profile));
+        await flushLogs();
+        setTraceField({ result: { quests } });
+        console.log(
+          `[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`,
+        );
+      } catch (err) {
+        // Swallow (best-effort pre-gen); the trace still records outcome:"error".
+        setTraceField({ outcome: "error", error: String((err as Error)?.message ?? err) });
+        console.error("[pregenerateCuratedBatch] Failed:", err);
+      }
+    });
   },
 );
