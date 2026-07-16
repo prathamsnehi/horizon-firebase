@@ -16,7 +16,7 @@ LLM APIs and Google Maps APIs are expensive and heavily rate-limited. We cannot 
 
 > **Implementation status:** Per-user caching + background pre-generation, the multi-provider router, and rate limiting are **shipped** (see [planned-changes.md](./planned-changes.md) §0/§0b). The remaining unbuilt item is the **global (cross-user) pool** described in the first bullet.
 
-- **Global Quest Caching (The Cost Killer):** _Partially shipped._ Per-user pre-generation is live (`pregenerateCuratedBatch` via Cloud Tasks stores each user's next batch in `user_quests/{deviceId}`). The **cross-user global pool** — hash `(City + Vibe + Interests)` → serve a shared batch across users for a $0 hit — is still to be built.
+- **Global Quest Caching (The Cost Killer):** _Partially shipped._ Per-user pre-generation is live (`pregenerateCuratedBatch` via Cloud Tasks stores each user's next batch in `pregen_cache/{deviceId}`). The **cross-user global pool** — hash `(City + Vibe + Interests)` → serve a shared batch across users for a $0 hit — is still to be built.
 - **Multi-Model Router (Fallback Strategy):** _Shipped_ as the `llm/` layer (Vercel AI SDK). Primary is Gemini; on 429/error it distributes + fails over across **Groq, Mistral, Cerebras** (all free-tier). Note: Claude/OpenAI have no free API tier, so they were intentionally excluded. Distribution is global + rate-aware via a Firestore multi-window limiter.
 - **Asynchronous Generation (Cloud Tasks):** _Shipped for pre-generation._ We don't return `status: processing`; instead `generateCuratedQuests` serves the pre-generated batch synchronously (instant on a cache hit) and uses **Cloud Tasks** only to build the *next* batch in the background. A miss generates synchronously (a few seconds).
 

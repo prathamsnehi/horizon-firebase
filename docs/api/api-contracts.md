@@ -176,7 +176,7 @@ Enforced **server-side**, per **`request.auth.uid`** (the verified Firebase Auth
 - `generateCuratedQuests` — **1 per 24h**.
 - `generateUserDescribedQuest` — **1 per 24h**, independent lane.
 
-**Crash/timeout-safe two-phase reservation** (state in `rateLimits/{uid}`):
+**Crash/timeout-safe two-phase reservation** (state in `user_rate_limits/{uid}`):
 
 - **Durable stamp** `lastCuratedAt`/`lastDescribedAt` — the 24h window is measured from here, and it's set **only on successful delivery** (at commit, right before the response is returned).
 - **Pending stamp** `pendingCuratedAt`/`pendingDescribedAt` — written inside a transaction *before* generation. A concurrent call, or a retry within **~2.5 min (150s)**, is denied against it (this is what blocks duplicates).
