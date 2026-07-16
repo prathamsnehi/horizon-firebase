@@ -141,31 +141,16 @@ export interface LocationConceptsResponse {
 // ------------------------------
 
 /**
- * Represents a document in the `user_quests/{deviceId}` collection — the
- * per-user cache state for both the curated batch and the described quest.
- *
- * `served*` fields record what the user got most recently. `next*` fields hold
- * the background-pre-generated batch ready to serve next, validated by profile
- * hash + TTL. `describe*` mirrors this for the freeform describe flow.
- *
- * NOTE: no per-user daily cap is currently enforced (testing phase); these
- * fields are used for caching only. The `*Date` fields are retained so a daily
- * cap can be re-enabled later without a schema change.
+ * Represents a document in the `pregen_cache/{deviceId}` collection — an
+ * ephemeral, regenerable cache holding the next pre-generated curated batch for
+ * a device. NOT a durable store of user data: the batch is written by the
+ * background pre-gen task, served instantly on the next request, then cleared.
  */
-export interface UserQuestStateDocument {
+export interface PregenCacheDocument {
   deviceId: string;
-
-  // Curated daily batch
-  servedBatch?: QuestItem[];
-  servedDate?: string; // "YYYY-MM-DD" — last day a curated batch was served
   nextBatch?: QuestItem[];
-  nextBatchHash?: string; // profileHash of nextBatch
+  nextBatchHash?: string; // profileHash of nextBatch (invalidates on profile change)
   nextBatchCreatedAt?: number; // Unix ms, for TTL validation
-
-  // Described daily quest
-  describeResult?: QuestItem;
-  describeDate?: string; // "YYYY-MM-DD" — last day a described quest was served
-  describePrompt?: string; // the prompt that produced describeResult (idempotency key)
 }
 
 /**

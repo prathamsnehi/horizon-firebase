@@ -1,4 +1,4 @@
-import {defineSecret} from "firebase-functions/params";
+import { defineSecret } from "firebase-functions/params";
 
 // ------------------------------
 // Secrets:
@@ -20,11 +20,12 @@ export const cerebrasApiKey = defineSecret("CEREBRAS_API_KEY");
 // How many quests a curated batch contains (server-controlled).
 export const CURATED_BATCH_SIZE = 3;
 
-// Maximum age of a pre-generated batch before it's considered stale (7 days).
-export const BATCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Maximum age of a pre-generated batch before it's considered stale (60 days).
+export const BATCH_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 
 // The base URL for calling the Places API (New)
-export const PLACES_API_BASE_URL = "https://places.googleapis.com/v1/places:searchText";
+export const PLACES_API_BASE_URL =
+  "https://places.googleapis.com/v1/places:searchText";
 
 // ------------------------------
 // Cloud Tasks (background pre-generation):
