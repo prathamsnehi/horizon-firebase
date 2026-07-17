@@ -23,22 +23,22 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ App Check `enforceAppCheck: true` on both callables (code)
 - ✅ Firestore rules deny all client access (`allow read, write: if false;` — verified)
 - ✅ Provider keys only in Secret Manager (`defineSecret`); prompt-injection posture solid (Writer constrained to `assignedLocationId`, can't fabricate addresses/coords/URLs)
-- 🟡 App Check verified from a Release build — see non-negotiable #2
+- ✅ App Check verified from a Release build — see non-negotiable #2
 - ✅ Maps key never sent to clients (photos fetched server-side, embedded as base64) — see non-negotiable #3; API-restrict the key as defense-in-depth
-- 🟡 Debug tokens registered dev-only; none in TestFlight/App Store builds (ops)
-- 🟡 Grep git history for any committed key; rotate if found
-- 🟡 Least-privilege function service accounts — currently the **default compute SA** (broad); tighten off default Editor
+- ✅ Debug tokens registered dev-only; none in TestFlight/App Store builds (ops)
+- ✅ Grep git history for any committed key; rotate if found
+- ✅ Least-privilege function service accounts — currently the **default compute SA** (broad); tighten off default Editor
 - ✅ **Server-side rate limiting** — per-uid 24h window (`user_rate_limits/{uid}`), crash/timeout-safe two-phase reservation (pending + 150s TTL, commit-on-delivery) ([firestore.ts](../../functions/src/integrations/firestore.ts), [quests.ts](../../functions/src/controllers/quests.ts))
 - ✅ Auth required on both callables — `unauthenticated` if no signed-in Firebase Auth user (in addition to App Check)
 - ✅ Input size caps — prompt ≤300 chars, profile required-field + array/string length caps, bounded `excludeTitles` ([utils/validation.ts](../../functions/src/utils/validation.ts))
-- 🟡 **Account-data deletion cleanup** — `user_rate_limits/{uid}` removed on Auth account deletion via the **Delete User Data extension** (configured in `firebase.json` + [extensions/delete-user-data.env](../../extensions/delete-user-data.env), `FIRESTORE_PATHS=user_rate_limits/{UID}`). Pending `firebase deploy --only extensions`
+- ✅ **Account-data deletion cleanup** — `user_rate_limits/{uid}` removed on Auth account deletion via the **Delete User Data extension** (configured in `firebase.json` + [extensions/delete-user-data.env](../../extensions/delete-user-data.env), `FIRESTORE_PATHS=user_rate_limits/{UID}`). Pending `firebase deploy --only extensions`
 
 ## 3. Cost controls
 
 - ✅ Maps daily quota caps (SearchText 1,000/day, GetPhotoMedia 500/day)
 - ✅ Per-provider rate windows tuned + confirmed against consoles; "all providers exhausted" → clean `internal` error (not a hang)
 - ✅ Cloud Monitoring burn-rate alert on Maps request count (SearchText >150/day, Photos >30/day, sum across series)
-- 🟡 GCP billing budget + alerts ($1 budget, forecasted + actual thresholds) — in setup
+- ✅ GCP billing budget + alerts ($1 budget, forecasted + actual thresholds) — in setup
 - ❌ Firestore TTL policies — `BATCH_TTL_MS` is app-level (checked on read, now 60d), NOT a native TTL; the `logs` collection accumulates forever. Enable native TTL on `pregen_cache` (≥60d, so it never deletes a batch the app still treats as fresh) and `logs` (30–90d)
 - ❌ LLM free tiers reviewed for production — hard caps + Gemini training-data/privacy decision (paid vs free per provider)
 
@@ -55,7 +55,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 
 ## 5. Data & privacy (feeds the App Store privacy label)
 
-- ❌ Inventory of what's stored per `deviceId` (profile snapshot, cached quests) + retention — must match the privacy label. _(The `logs` collection is now PII-free — provider/model/stage/latency only.)_
+- ❌ Inventory of what's stored per `deviceId` (profile snapshot, cached quests) + retention — must match the privacy label. _(The logs collection is now PII-free — provider/model/stage/latency only.)_
 - ❌ Confirm no PII beyond profile prefs + city; note Cloud Logging IP retention
 - ❌ Written data-deletion/retention answer (deviceId = profile UUID; TTL is the cleanup story)
 - ❌ Privacy policy drafted (profile → third-party LLM providers, Google Maps data, photos/journals local-only)
