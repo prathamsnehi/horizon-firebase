@@ -15,6 +15,7 @@ import {
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
 import { evaluateReservation } from "../utils/rateLimit";
+import { BATCH_TTL_MS } from "../config";
 
 /**
  * Initialize the Admin SDK once at module load (runs at cold start, before any
@@ -90,7 +91,7 @@ const RATE_BUCKET_DOC = "llm_rate_buckets/global";
  */
 export async function reserveLlmToken(
   candidateKeys: string[],
-  limits: Record<string, RateWindowConfig[]>
+  limits: Record<string, RateWindowConfig[]>,
 ): Promise<string[]> {
   try {
     const ref = getDb().doc(RATE_BUCKET_DOC);
@@ -128,7 +129,7 @@ export async function reserveLlmToken(
       if (eligible.length) {
         chosen = eligible.reduce(
           (best, key) => (headroom[key] > headroom[best] ? key : best),
-          eligible[0]
+          eligible[0],
         );
         const windows = limits[chosen] ?? [];
         const state = data[chosen];
@@ -196,7 +197,7 @@ const PREGEN_CACHE_COLLECTION = "pregen_cache";
 
 /** Read a device's cached pre-generated batch (if any). */
 export async function getPregenCache(
-  deviceId: string
+  deviceId: string,
 ): Promise<PregenCacheDocument | null> {
   const snap = await getDb()
     .collection(PREGEN_CACHE_COLLECTION)
@@ -210,7 +211,7 @@ export async function savePregeneratedBatch(
   deviceId: string,
   batch: QuestItem[],
   profileHash: string,
-  createdAt: number = Date.now()
+  createdAt: number = Date.now(),
 ): Promise<void> {
   await getDb()
     .collection(PREGEN_CACHE_COLLECTION)
@@ -221,8 +222,9 @@ export async function savePregeneratedBatch(
         nextBatch: batch,
         nextBatchHash: profileHash,
         nextBatchCreatedAt: createdAt,
+        expireAt: Timestamp.fromMillis(createdAt + BATCH_TTL_MS), // for the sake of native firestore TTL
       },
-      { merge: true }
+      { merge: true },
     );
 }
 
@@ -231,18 +233,15 @@ export async function savePregeneratedBatch(
  * re-generation can't serve the same batch twice.
  */
 export async function clearPregenBatch(deviceId: string): Promise<void> {
-  await getDb()
-    .collection(PREGEN_CACHE_COLLECTION)
-    .doc(deviceId)
-    .set(
-      {
-        deviceId,
-        nextBatch: null,
-        nextBatchHash: null,
-        nextBatchCreatedAt: null,
-      },
-      { merge: true }
-    );
+  await getDb().collection(PREGEN_CACHE_COLLECTION).doc(deviceId).set(
+    {
+      deviceId,
+      nextBatch: null,
+      nextBatchHash: null,
+      nextBatchCreatedAt: null,
+    },
+    { merge: true },
+  );
 }
 
 // ------------------------------
@@ -278,7 +277,7 @@ export interface RateReservation {
  */
 export async function reserveRateLimitSlot(
   uid: string,
-  action: RateAction
+  action: RateAction,
 ): Promise<RateReservation> {
   const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
   const lastField = lastFieldFor(action);
@@ -293,12 +292,19 @@ export async function reserveRateLimitSlot(
     const result = evaluateReservation(
       lastTs ? lastTs.toMillis() : null,
       pendingTs ? pendingTs.toMillis() : null,
-      nowMs
+      nowMs,
     );
     if (!result.allowed) {
-      return { allowed: false, retryAt: new Date(result.retryAtMs!).toISOString() };
+      return {
+        allowed: false,
+        retryAt: new Date(result.retryAtMs!).toISOString(),
+      };
     }
-    tx.set(ref, { [pendingField]: Timestamp.fromMillis(nowMs) }, { merge: true });
+    tx.set(
+      ref,
+      { [pendingField]: Timestamp.fromMillis(nowMs) },
+      { merge: true },
+    );
     return { allowed: true };
   });
 }
@@ -310,7 +316,7 @@ export async function reserveRateLimitSlot(
  */
 export async function commitRateLimitSlot(
   uid: string,
-  action: RateAction
+  action: RateAction,
 ): Promise<void> {
   await getDb()
     .collection(RATE_LIMITS_COLLECTION)
@@ -320,7 +326,7 @@ export async function commitRateLimitSlot(
         [lastFieldFor(action)]: Timestamp.now(),
         [pendingFieldFor(action)]: FieldValue.delete(),
       },
-      { merge: true }
+      { merge: true },
     );
 }
 
@@ -331,7 +337,7 @@ export async function commitRateLimitSlot(
  */
 export async function releaseRateLimitSlot(
   uid: string,
-  action: RateAction
+  action: RateAction,
 ): Promise<void> {
   try {
     await getDb()
