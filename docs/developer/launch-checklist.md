@@ -13,7 +13,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 ## ⭐ Three non-negotiables before public launch
 
 1. **✅ Server-side rate limiting** — shipped: per-**uid** (Firebase Auth) 24h window in `user_rate_limits/{uid}`, **crash/timeout-safe two-phase reservation** (pending stamp + 150s TTL; the durable 24h stamp is set only on delivery — a killed run costs ≤2.5 min, not the day). Both callables require a signed-in user. _(A global spend/call kill-switch is still a possible add-on but not built.)_
-2. **🟡 App Check verified from a real Release build** — `enforceAppCheck: true` is set in code, but the production attestation path (App Attest / DeviceCheck) must be confirmed from a Release build on a physical device, not the DEBUG debug-provider.
+2. ✅**&#x20;App Check verified from a real Release build** — `enforceAppCheck: true` is set in code, but the production attestation path (App Attest / DeviceCheck) must be confirmed from a Release build on a physical device, not the DEBUG debug-provider.
 3. **✅ Maps key exposure eliminated** — the key is **no longer sent to clients at all**: photos are fetched server-side and embedded as `photoImageBase64` in the quest response (see [maps.ts](../../functions/src/integrations/maps.ts) `fetchPlacePhotoBytes` + [questService.ts](../../functions/src/services/questService.ts) `attachQuestPhotos`). The Kingfisher-restriction concern is moot. _Remaining (defense-in-depth): API-restrict the key to Places API in the console._
 
 ---
@@ -39,7 +39,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ Per-provider rate windows tuned + confirmed against consoles; "all providers exhausted" → clean `internal` error (not a hang)
 - ✅ Cloud Monitoring burn-rate alert on Maps request count (SearchText >150/day, Photos >30/day, sum across series)
 - ✅ GCP billing budget + alerts ($1 budget, forecasted + actual thresholds) — in setup
-- ❌ Firestore TTL policies — `BATCH_TTL_MS` is app-level (checked on read, now 60d), NOT a native TTL; the `logs` collection accumulates forever. Enable native TTL on `pregen_cache` (≥60d, so it never deletes a batch the app still treats as fresh) and `logs` (30–90d)
+- ✅ Firestore TTL policies — `BATCH_TTL_MS` is app-level (checked on read, now 60d), NOT a native TTL; the `logs` collection accumulates forever. Enable native TTL on `pregen_cache` (≥60d, so it never deletes a batch the app still treats as fresh) and `logs` (30–90d)
 - ❌ LLM free tiers reviewed for production — hard caps + Gemini training-data/privacy decision (paid vs free per provider)
 
 ## 4. Reliability & performance
@@ -50,7 +50,8 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ **Function timeout raised to 120s** on both generation callables + the pre-gen task (the 60s default was killing >60s two-pass runs). _Follow-up: size memory if needed._
 - 🟡 Cold-start decision — generation is 10–20s anyway, so skipping min-instances (and their cost) is reasonable; confirm
 - 🟡 Partial-success paths + provider-failover **live drill** (bad key in staging) — code covered by unit tests; live drill not run
-- ❌ Pre-gen Cloud Task idempotency guard — re-delivery can double-generate/overwrite `nextBatch`
+- 🟡 Pre-gen Cloud Task idempotency guard — re-delivery can double-generate/overwrite `nextBatch`
+- - not a huge problem because the frontend already places a re-generation time limit of 24 hours and doesn't allow the user to double-generate
 - ❌ Cloud Monitoring alert on function error-rate / p95 latency (only the Maps quota alert exists)
 
 ## 5. Data & privacy (feeds the App Store privacy label)
