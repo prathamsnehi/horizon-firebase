@@ -16,8 +16,8 @@ The routing layer itself is in place; these are the open items around it.
 - **Confirm free-tier model IDs + eval quality.** [models.ts](../../functions/src/llm/models.ts) candidate model IDs churn — validate they exist on each provider's current catalog, and eval quality per provider before trusting the rotation (heterogeneous models = variable output quality).
 - **Wire the load dashboard.** Enable AI SDK OpenTelemetry → Langfuse, and/or the Firestore→BigQuery→Looker Studio path on the `logs` collection (PII-free: stage/provider/model/latency).
 - **Precise token (TPM/TPD) accounting** — currently only request-count windows (rpm/rpd) are modeled; token-limit 429s lean on `penalizeRateKey`.
-- **Shard the `llm_rate_buckets/global` doc** if single-doc write contention becomes a bottleneck (distributed-counter pattern).
-- **`logs` retention/TTL + sampling** once write volume matters.
+- **Shard the llm_rate_buckets/global doc** if single-doc write contention becomes a bottleneck (distributed-counter pattern).
+- **logs retention/TTL + sampling** once write volume matters.
 - **Add more providers** (e.g. an OpenRouter free-model pool) if broader fallback breadth is ever needed — trivial via the AI SDK.
 
 ---
@@ -28,7 +28,7 @@ The per-user cache-first flow and describe mode are in place; these remain.
 
 - **PT-accurate daily reset** — currently UTC date keys; align to the provider/product timezone later.
 - **Fuller describe moderation** — currently a lightweight keyword blocklist + provider safety; add a real moderation pass.
-- ~~**Full describe UI** in the web client~~ — **done**: the `/app/create` compose screen calls `generateUserDescribedQuest` and commits the result as the active quest.
+- ~~Full describe UI in the web client~~ — **done**: the `/app/create` compose screen calls `generateUserDescribedQuest` and commits the result as the active quest.
 - **Enable the Cloud Tasks API** in the project for pre-gen enqueue to work (ops).
 - Cross-user global pool — see #4.
 
@@ -52,15 +52,16 @@ Scout queries repeat heavily across users — "specialty coffee roasters in Sain
 **Status:** Idea / open (per-user pre-generation already exists; the cross-user pool does not)
 **Effort:** Large (backend-only)
 
-Hash `city + vibe + interests` → serve a *shared* batch across users. A cache hit costs **$0** (no LLM *and* no Maps). This is the bigger cost lever: many users in the same city with similar profiles could share generated batches instead of each getting their own. The per-user `hashProfile` in [hash.ts](../../functions/src/utils/hash.ts) is a stepping stone; a global pool would hash the coarser `city+vibe+interests` tuple.
+Hash `city + vibe + interests` → serve a _shared_ batch across users. A cache hit costs **$0** (no LLM _and_ no Maps). This is the bigger cost lever: many users in the same city with similar profiles could share generated batches instead of each getting their own. The per-user `hashProfile` in [hash.ts](../../functions/src/utils/hash.ts) is a stepping stone; a global pool would hash the coarser `city+vibe+interests` tuple.
 
 ---
 
 ## 5. Shed a Places API SKU tier (cost) — DONE
 
-Was: Enterprise + Atmosphere (top SKU), driven by `editorialSummary` (Atmosphere) plus `rating`/`userRatingCount` (Enterprise). Now dropped to **Text Search Pro** (~5,000 free calls/month vs ~1,000; ~$0.032 vs ~$0.04 per call) by:
-- **Removing `editorialSummary`** — the short location summary is now written by the Writer LLM (free, quest-tailored) instead of bought from Maps. See [tasks.ts](../../functions/src/llm/tasks.ts) / [prompts.ts](../../functions/src/utils/prompts.ts).
-- **Removing `rating`/`userRatingCount`** — `getBestLocation` now selects a middle-ground place from the top few of Google's default relevance order (which already reflects popularity), instead of an explicit rating × review-volume score.
+Was: Enterprise + Atmosphere (top SKU), driven by `editorialSummary` (Atmosphere) plus `rating`/`userRatingCount` (Enterprise). Now dropped to **Text Search Pro** (\~5,000 free calls/month vs \~1,000; \~$0.032 vs \~$0.04 per call) by:
+
+- **Removing editorialSummary** — the short location summary is now written by the Writer LLM (free, quest-tailored) instead of bought from Maps. See [tasks.ts](../../functions/src/llm/tasks.ts) / [prompts.ts](../../functions/src/utils/prompts.ts).
+- **Removing rating/userRatingCount** — `getBestLocation` now selects a middle-ground place from the top few of Google's default relevance order (which already reflects popularity), instead of an explicit rating × review-volume score.
 
 _Note: fetching 10 candidates costs the same as fetching 1 — Text Search bills per call, not per result._
 
@@ -79,8 +80,7 @@ Deferred because it requires a frontend/onboarding change — the current push i
 
 ## Cost reference (as of 2026-06-30)
 
-- Places API (New) Text Search bills **per call**, at the highest SKU tier any requested field touches. Current tier: **Pro (~$32 / 1,000 calls = ~$0.032/call, ~5,000 free/month)** — see #5 for how it was reduced from Enterprise + Atmosphere.
+- Places API (New) Text Search bills **per call**, at the highest SKU tier any requested field touches. Current tier: **Pro (\~$32 / 1,000 calls = \~$0.032/call, \~5,000 free/month)** — see #5 for how it was reduced from Enterprise + Atmosphere.
 - One batch of Maps calls ≈ **$0.032 per place**.
 - Google Maps Platform has a **recurring monthly free tier** that comfortably covers development/low volume — verify exact caps in Console → Billing.
 - **During development, stub Maps** with a fixture to avoid burning quota while iterating on prompts.
-</content>
