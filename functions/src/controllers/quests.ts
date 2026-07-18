@@ -85,7 +85,7 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
  * (CURATED_BATCH_SIZE); the request carries only { profile, deviceId, excludeTitles? }.
  */
 export const generateCuratedQuests = functions.https.onCall(
-  { enforceAppCheck: true, secrets: LLM_SECRETS, timeoutSeconds: 120 },
+  { enforceAppCheck: true, secrets: LLM_SECRETS },
   async (request): Promise<QuestResponse> => {
     // A: require authentication (App Check is enforced by the runtime).
     if (!request.auth) {
@@ -211,7 +211,7 @@ export const generateCuratedQuests = functions.https.onCall(
  * DIFFERENT prompt the same day is rejected as rate-limited.
  */
 export const generateUserDescribedQuest = functions.https.onCall(
-  { enforceAppCheck: true, secrets: LLM_SECRETS, timeoutSeconds: 120 },
+  { enforceAppCheck: true, secrets: LLM_SECRETS },
   async (request): Promise<DescribedQuestResponse> => {
     // A: require authentication (App Check is enforced by the runtime).
     if (!request.auth) {
