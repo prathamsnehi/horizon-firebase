@@ -15,6 +15,7 @@ import {
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
 import { evaluateReservation } from "../utils/rateLimit";
+import { BATCH_TTL_MS } from "../config";
 
 /**
  * Initialize the Admin SDK once at module load (runs at cold start, before any
@@ -244,6 +245,7 @@ export async function savePregeneratedBatch(
         nextBatch: batch,
         nextBatchHash: profileHash,
         nextBatchCreatedAt: createdAt,
+        expireAt: Timestamp.fromMillis(createdAt + BATCH_TTL_MS), // for the sake of native firestore TTL
       },
       { merge: true }
     );
