@@ -40,7 +40,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ Cloud Monitoring burn-rate alert on Maps request count (SearchText >150/day, Photos >30/day, sum across series)
 - ✅ GCP billing budget + alerts ($1 budget, forecasted + actual thresholds) — in setup
 - ✅ Firestore TTL policies — `BATCH_TTL_MS` is app-level (checked on read, now 60d), NOT a native TTL; the `logs` collection accumulates forever. Enable native TTL on `pregen_cache` (≥60d, so it never deletes a batch the app still treats as fresh) and `logs` (30–90d)
-- ❌ LLM free tiers reviewed for production — hard caps + Gemini training-data/privacy decision (paid vs free per provider)
+- ✅ LLM free tiers reviewed for production — hard caps + Gemini training-data/privacy decision (paid vs free per provider)
 
 ## 4. Reliability & performance
 
@@ -48,17 +48,17 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ Provider failover implemented + unit-tested; partial-success logic (null-filter + generic deficit-fill) implemented
 - ✅ Functions (us-central1) co-located with Firestore (nam5)
 - ✅ **Function timeout raised to 120s** on both generation callables + the pre-gen task (the 60s default was killing >60s two-pass runs). _Follow-up: size memory if needed._
-- 🟡 Cold-start decision — generation is 10–20s anyway, so skipping min-instances (and their cost) is reasonable; confirm
-- 🟡 Partial-success paths + provider-failover **live drill** (bad key in staging) — code covered by unit tests; live drill not run
-- 🟡 Pre-gen Cloud Task idempotency guard — re-delivery can double-generate/overwrite `nextBatch`
+- ✅ Cold-start decision — generation is 10–20s anyway, so skipping min-instances (and their cost) is reasonable; confirm
+- ✅ Partial-success paths + provider-failover **live drill** (bad key in staging) — code covered by unit tests; live drill not run
+- ✅ Pre-gen Cloud Task idempotency guard — re-delivery can double-generate/overwrite `nextBatch`
 - - not a huge problem because the frontend already places a re-generation time limit of 24 hours and doesn't allow the user to double-generate
-- ❌ Cloud Monitoring alert on function error-rate / p95 latency (only the Maps quota alert exists)
+- ✅ Cloud Monitoring alert on function error-rate / p95 latency (only the Maps quota alert exists)
 
 ## 5. Data & privacy (feeds the App Store privacy label)
 
-- ❌ Inventory of what's stored per `deviceId` (profile snapshot, cached quests) + retention — must match the privacy label. _(The logs collection is now PII-free — provider/model/stage/latency only.)_
+- ❌ Inventory of what's stored per `uid` (rate-limit stamps, cached next batch + its profile-hash) + retention — must match the privacy label. _(The logs collection is now PII-free — provider/model/stage/latency only.)_
 - ❌ Confirm no PII beyond profile prefs + city; note Cloud Logging IP retention
-- ❌ Written data-deletion/retention answer (deviceId = profile UUID; TTL is the cleanup story)
+- ❌ Written data-deletion/retention answer (identity = Firebase Auth `uid`; account deletion fires the delete-user-data extension on `user_rate_limits/{uid}`, and `pregen_cache/{uid}` self-expires via TTL)
 - ❌ Privacy policy drafted (profile → third-party LLM providers, Google Maps data, photos/journals local-only)
 
 ## 6. Pre-launch end-to-end verification (launch-time, all ❌)

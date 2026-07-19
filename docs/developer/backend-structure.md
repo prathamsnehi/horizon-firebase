@@ -49,12 +49,12 @@ _Note: the old `integrations/gemini.ts` was replaced by the multi-provider `llm/
 - This is where you define your `onCall` (Firebase 2nd Gen) functions.
 - **What it does:** 
   - Extracts incoming data from `request.data`.
-  - Validates the request (e.g., checks if `deviceId` is present).
+  - Validates the request (e.g., checks the profile payload is well-formed). Identity comes from the authenticated `request.auth.uid`, not the payload.
   - Calls the appropriate Service to do the actual work.
   - Catches any errors thrown by the Service and formats them into Firebase `HttpsError` objects so the iOS app receives clean error codes (e.g., `rate_limited`).
 - **What it DOES NOT do:** No AI logic, no API keys, no direct database calls.
 
-*Example:* `controllers/quests.ts` just receives the profile and device ID, passes them to `QuestService.getBatch()`, and returns the result.
+*Example:* `controllers/quests.ts` just receives the profile, passes it to `QuestService.getBatch()`, and returns the result.
 
 ### 2. Services (`src/services/`)
 **Responsibility:** The brain of the backend (Business Logic).
@@ -71,7 +71,7 @@ _Note: the old `integrations/gemini.ts` was replaced by the multi-provider `llm/
   - Wraps third-party SDKs and network calls. 
   - `gemini.ts`: Initializes the `GoogleGenerativeAI` client, contains the system prompts, and handles the Structured Output / function calling formatting.
   - `maps.ts`: Handles the raw `fetch` call to the Places API, passes the `X-Goog-FieldMask`, and constructs the final photo media URLs.
-  - `firestore.ts`: Provides simple helper functions like `getCachedBatch(deviceId)` and `saveBatch(deviceId, batch)`.
+  - `firestore.ts`: Provides simple helper functions like `getCachedBatch(uid)` and `saveBatch(uid, batch)`.
 - **Why this layer exists:** If Google Maps changes their API endpoint, or if you decide to swap Gemini for another model later, you only have to rewrite the files in this folder. The rest of the app remains completely untouched.
 
 ---
@@ -93,7 +93,7 @@ Hardcoded values and configurations go here. For example:
 ## Example Flow: The curated daily batch (cache-first)
 
 1. **App** calls `generateCuratedQuests`.
-2. **Controller (`controllers/quests.ts`)** validates the payload, reads `pregen_cache/{deviceId}` via `firestore.ts`, and computes the profile hash (`utils/hash.ts`).
+2. **Controller (`controllers/quests.ts`)** validates the payload, reads `pregen_cache/{uid}` via `firestore.ts`, and computes the profile hash (`utils/hash.ts`).
 3. **Cache hit:** returns a valid pre-generated batch immediately. Done.
 4. **Cache hit (valid `nextBatch`):** serves the pre-generated batch.
 5. **Cache miss:** calls **Service (`services/questService.ts`) → `generateBatch`**, which runs the two-pass pipeline via the **`llm/`** layer (scout → Maps `getBestLocation` → distance/transport enrich → writer → generic deficit-fill).

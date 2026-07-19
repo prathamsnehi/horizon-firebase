@@ -39,7 +39,6 @@ export interface UserProfile {
  */
 export interface CuratedQuestRequest {
   profile: UserProfile;
-  deviceId: string;
   excludeTitles?: string[];
 }
 
@@ -53,7 +52,6 @@ export interface CuratedQuestRequest {
 export interface DescribedQuestRequest {
   prompt: string;
   profile: UserProfile;
-  deviceId: string;
 }
 
 export interface DescribedQuestResponse {
@@ -141,13 +139,13 @@ export interface LocationConceptsResponse {
 // ------------------------------
 
 /**
- * Represents a document in the `pregen_cache/{deviceId}` collection — an
- * ephemeral, regenerable cache holding the next pre-generated curated batch for
- * a device. NOT a durable store of user data: the batch is written by the
- * background pre-gen task, served instantly on the next request, then cleared.
+ * Represents a document in the `pregen_cache/{uid}` collection — an ephemeral,
+ * regenerable cache holding the next pre-generated curated batch for a user. NOT
+ * a durable store of user data: the batch is written by the background pre-gen
+ * task, served instantly on the next request, then cleared.
  */
 export interface PregenCacheDocument {
-  deviceId: string;
+  uid: string;
   nextBatch?: QuestItem[];
   nextBatchHash?: string; // profileHash of nextBatch (invalidates on profile change)
   nextBatchCreatedAt?: number; // Unix ms, for TTL validation
@@ -157,7 +155,7 @@ export interface PregenCacheDocument {
  * Payload enqueued to the Cloud Task that pre-generates the next curated batch.
  */
 export interface PregenTaskPayload {
-  deviceId: string;
+  uid: string;
   profile: UserProfile;
 }
 

@@ -187,38 +187,38 @@ export async function penalizeRateKey(rateKey: string): Promise<void> {
 }
 
 // ------------------------------
-// Pre-generation cache (pregen_cache/{deviceId})
+// Pre-generation cache (pregen_cache/{uid})
 // ------------------------------
-// Ephemeral, regenerable cache of the next curated batch per device. NOT a
+// Ephemeral, regenerable cache of the next curated batch per user. NOT a
 // durable store of user data — it holds only a pre-generated batch that the
 // next request serves instantly, then discards.
 
 const PREGEN_CACHE_COLLECTION = "pregen_cache";
 
-/** Read a device's cached pre-generated batch (if any). */
+/** Read a user's cached pre-generated batch (if any). */
 export async function getPregenCache(
-  deviceId: string,
+  uid: string,
 ): Promise<PregenCacheDocument | null> {
   const snap = await getDb()
     .collection(PREGEN_CACHE_COLLECTION)
-    .doc(deviceId)
+    .doc(uid)
     .get();
   return snap.exists ? (snap.data() as PregenCacheDocument) : null;
 }
 
 /** Store a background pre-generated batch ready to serve next. */
 export async function savePregeneratedBatch(
-  deviceId: string,
+  uid: string,
   batch: QuestItem[],
   profileHash: string,
   createdAt: number = Date.now(),
 ): Promise<void> {
   await getDb()
     .collection(PREGEN_CACHE_COLLECTION)
-    .doc(deviceId)
+    .doc(uid)
     .set(
       {
-        deviceId,
+        uid,
         nextBatch: batch,
         nextBatchHash: profileHash,
         nextBatchCreatedAt: createdAt,
@@ -229,13 +229,13 @@ export async function savePregeneratedBatch(
 }
 
 /**
- * Invalidate a device's cached batch after it's been served, so a failed
+ * Invalidate a user's cached batch after it's been served, so a failed
  * re-generation can't serve the same batch twice.
  */
-export async function clearPregenBatch(deviceId: string): Promise<void> {
-  await getDb().collection(PREGEN_CACHE_COLLECTION).doc(deviceId).set(
+export async function clearPregenBatch(uid: string): Promise<void> {
+  await getDb().collection(PREGEN_CACHE_COLLECTION).doc(uid).set(
     {
-      deviceId,
+      uid,
       nextBatch: null,
       nextBatchHash: null,
       nextBatchCreatedAt: null,
