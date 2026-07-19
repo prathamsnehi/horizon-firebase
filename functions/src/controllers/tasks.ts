@@ -30,23 +30,22 @@ export const pregenerateCuratedBatch = onTaskDispatched(
     ],
     retryConfig: { maxAttempts: 2 },
     rateLimits: { maxConcurrentDispatches: 5 }, // workers allowed to run in parallel, doesn't limit the queue
-    timeoutSeconds: 120, // same two-pass generation as the callables
   },
   async (request) => {
-    const { deviceId, profile } = request.data as PregenTaskPayload;
-    if (!deviceId || !profile) {
+    const { uid, profile } = request.data as PregenTaskPayload;
+    if (!uid || !profile) {
       console.error("[pregenerateCuratedBatch] Invalid payload; skipping.");
       return;
     }
 
-    await runTrace({ type: "pregen", deviceId }, async () => {
+    await runTrace({ type: "pregen", uid }, async () => {
       try {
         const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
-        await savePregeneratedBatch(deviceId, quests, hashProfile(profile));
+        await savePregeneratedBatch(uid, quests, hashProfile(profile));
         await flushLogs();
         setTraceField({ result: { quests } });
         console.log(
-          `[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`,
+          `[pregenerateCuratedBatch] Stored next batch for ${uid}.`,
         );
       } catch (err) {
         // Swallow (best-effort pre-gen); the trace still records outcome:"error".

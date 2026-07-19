@@ -53,39 +53,6 @@ function mapPlaceToLocation(place: any): LocationInformation {
   };
 }
 
-/**
- * Returns information about the top location based on query text
- */
-export async function getTopLocation(
-  queryText: string,
-): Promise<LocationInformation | null> {
-  // We only need the very first result for the "top" location
-  const places = await fetchPlaces(queryText, 1);
-
-  if (places.length === 0) {
-    return null;
-  }
-
-  return mapPlaceToLocation(places[0]);
-}
-
-/**
- * Returns information for a random location (non-top) based on query text
- */
-export async function getRandomLocation(
-  queryText: string,
-): Promise<LocationInformation | null> {
-  // Fetch up to 10 places so we have a good pool to pick randomly from
-  const places = await fetchPlaces(queryText, 10);
-
-  if (places.length === 0) {
-    return null;
-  }
-
-  const randomIndex = Math.floor(Math.random() * places.length);
-  return mapPlaceToLocation(places[randomIndex]);
-}
-
 // Selection pool to pick a random top x location for quest:
 const SELECTION_POOL_SIZE = 5;
 
@@ -143,4 +110,42 @@ export async function fetchPlacePhotoBytes(
     console.error("[fetchPlacePhotoBytes] failed:", err);
     return null;
   }
+}
+
+// ------------------------------
+// Alternate selection strategies (not currently wired into the pipeline; kept
+// for potential future use — getBestLocation is the one in use today).
+// ------------------------------
+
+/**
+ * Returns information about the top location based on query text
+ */
+export async function getTopLocation(
+  queryText: string,
+): Promise<LocationInformation | null> {
+  // We only need the very first result for the "top" location
+  const places = await fetchPlaces(queryText, 1);
+
+  if (places.length === 0) {
+    return null;
+  }
+
+  return mapPlaceToLocation(places[0]);
+}
+
+/**
+ * Returns information for a random location (non-top) based on query text
+ */
+export async function getRandomLocation(
+  queryText: string,
+): Promise<LocationInformation | null> {
+  // Fetch up to 10 places so we have a good pool to pick randomly from
+  const places = await fetchPlaces(queryText, 10);
+
+  if (places.length === 0) {
+    return null;
+  }
+
+  const randomIndex = Math.floor(Math.random() * places.length);
+  return mapPlaceToLocation(places[randomIndex]);
 }

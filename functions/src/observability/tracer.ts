@@ -40,7 +40,6 @@ export interface TraceContext {
   traceId: string;
   type: TraceType;
   uid?: string;
-  deviceId?: string;
   startMs: number;
   spans: TraceSpan[];
   outcome?: TraceOutcome;
@@ -52,7 +51,6 @@ export interface TraceContext {
 export interface TraceInit {
   type: TraceType;
   uid?: string;
-  deviceId?: string;
 }
 
 const als = new AsyncLocalStorage<TraceContext>();
@@ -62,7 +60,7 @@ export function currentTrace(): TraceContext | undefined {
   return als.getStore();
 }
 
-/** Patch top-level trace fields (uid, deviceId, outcome, result, …). No-op if inactive. */
+/** Patch top-level trace fields (uid, outcome, result, …). No-op if inactive. */
 export function setTraceField(patch: Partial<TraceContext>): void {
   const ctx = als.getStore();
   if (!ctx) return;
@@ -153,7 +151,6 @@ export async function runTrace<T>(
     traceId: randomUUID(),
     type: init.type,
     uid: init.uid,
-    deviceId: init.deviceId,
     startMs: Date.now(),
     spans: [],
     _seq: 0,
@@ -182,7 +179,6 @@ function toTraceDoc(ctx: TraceContext): Record<string, unknown> {
     traceId: ctx.traceId,
     type: ctx.type,
     uid: ctx.uid,
-    deviceId: ctx.deviceId,
     startedAt: ctx.startMs,
     totalLatencyMs: Date.now() - ctx.startMs,
     outcome: ctx.outcome ?? "success",
