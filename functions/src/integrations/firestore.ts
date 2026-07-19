@@ -348,8 +348,3 @@ export async function releaseRateLimitSlot(
     console.error("[releaseRateLimitSlot] failed:", err);
   }
 }
-
-/** Delete a user's rate-limit doc (account-deletion cleanup). */
-export async function deleteUserRateLimit(uid: string): Promise<void> {
-  await getDb().collection(RATE_LIMITS_COLLECTION).doc(uid).delete();
-}

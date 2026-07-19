@@ -139,28 +139,32 @@ export const generateCuratedQuests = functions.https.onCall(
         batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
       }
 
-      // Invalidate the consumed cache entry so a failed re-gen can't re-serve
-      // the same batch...
-      await clearPregenBatch(uid);
-      // ...and queue up the next one so the following request is instant.
-      await enqueuePregen({ uid, profile });
-      // Flush the best-effort stage logs before the container can freeze.
-      await flushLogs();
+      // These three are independent and all best-effort — run them together:
+      // invalidate the consumed cache entry (so a failed re-gen can't re-serve
+      // the same batch), queue up the next batch, and flush the stage logs
+      // before the container can freeze.
+      await Promise.all([
+        clearPregenBatch(uid),
+        enqueuePregen({ uid, profile }),
+        flushLogs(),
+      ]);
 
       console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cacheHit})`);
 
       // Embed hero-image bytes for the response ONLY, after persisting (so the
       // stored/cached batch stays reference-only and under Firestore's 1MB cap).
-      const responseBatch = await attachQuestPhotos(batch);
-
-      // Commit LAST (quests are landing): starts the 24h window at delivery and
-      // clears the pending stamp. A timeout before this leaves only the pending
-      // stamp, which self-expires in ≤150s — no burned day.
-      await commitRateLimitSlot(uid, "curated");
+      // The commit runs in parallel — both are past the point of no return
+      // (quests are landing), and photo attach is best-effort (never throws).
+      // Commit starts the 24h window at delivery and clears the pending stamp;
+      // a timeout before this leaves only the pending stamp (self-expires ≤90s).
+      const [responseBatch] = await Promise.all([
+        attachQuestPhotos(batch),
+        commitRateLimitSlot(uid, "curated"),
+      ]);
       return { quests: responseBatch };
     } catch (error) {
       // Generation failed — free the pending slot immediately (best-effort; a
-      // process death would let it self-expire within 150s instead).
+      // process death would let it self-expire within 90s instead).
       await releaseRateLimitSlot(uid, "curated");
       console.error("[generateCuratedQuests] Fatal error:", error);
       throw new functions.https.HttpsError(
@@ -228,15 +232,17 @@ export const generateUserDescribedQuest = functions.https.onCall(
       }
       console.log("[generateUserDescribedQuest] served a described quest");
       // Embed the hero-image bytes for the response (nothing to persist — a
-      // described quest is one-off and isn't cached).
-      const [responseQuest] = await attachQuestPhotos([quest]);
-
-      // Commit LAST (quest is landing): starts the 24h window at delivery.
-      await commitRateLimitSlot(uid, "described");
+      // described quest is one-off and isn't cached). Commit runs in parallel:
+      // the quest is landing and photo attach is best-effort (never throws).
+      // Commit starts the 24h window at delivery.
+      const [[responseQuest]] = await Promise.all([
+        attachQuestPhotos([quest]),
+        commitRateLimitSlot(uid, "described"),
+      ]);
       return { quest: responseQuest };
     } catch (error) {
       // Generation failed — free the pending slot immediately (best-effort; a
-      // process death would let it self-expire within 150s instead).
+      // process death would let it self-expire within 90s instead).
       await releaseRateLimitSlot(uid, "described");
       console.error("[generateUserDescribedQuest] Fatal error:", error);
       throw new functions.https.HttpsError(
