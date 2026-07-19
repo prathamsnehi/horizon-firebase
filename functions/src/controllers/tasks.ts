@@ -29,22 +29,19 @@ export const pregenerateCuratedBatch = onTaskDispatched(
     ],
     retryConfig: { maxAttempts: 2 },
     rateLimits: { maxConcurrentDispatches: 5 }, // workers allowed to run in parallel, doesn't limit the queue
-    timeoutSeconds: 120, // same two-pass generation as the callables
   },
   async (request) => {
-    const { deviceId, profile } = request.data as PregenTaskPayload;
-    if (!deviceId || !profile) {
+    const { uid, profile } = request.data as PregenTaskPayload;
+    if (!uid || !profile) {
       console.error("[pregenerateCuratedBatch] Invalid payload; skipping.");
       return;
     }
 
     try {
       const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
-      await savePregeneratedBatch(deviceId, quests, hashProfile(profile));
+      await savePregeneratedBatch(uid, quests, hashProfile(profile));
       await flushLogs();
-      console.log(
-        `[pregenerateCuratedBatch] Stored next batch for ${deviceId}.`,
-      );
+      console.log(`[pregenerateCuratedBatch] Stored next batch for ${uid}.`);
     } catch (err) {
       console.error("[pregenerateCuratedBatch] Failed:", err);
     }
