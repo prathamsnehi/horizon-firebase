@@ -31,16 +31,15 @@ The user's **curated batch**. Cache-first: serves a pre-generated batch from Fir
     "cityLatitude": 37.7749,
     "cityLongitude": -122.4194
   },
-  "excludeTitles": ["string"],
-  "deviceId": "string"
+  "excludeTitles": ["string"]
 }
 ```
 
-`excludeTitles` (optional) contains titles of recently completed quests to avoid duplicates. `deviceId` identifies the device (and keys the per-user cache).
+`excludeTitles` (optional) contains titles of recently completed quests to avoid duplicates. The per-user pre-generation cache is keyed server-side on the authenticated `request.auth.uid` — the client sends no identity field.
 
 `cityLatitude`/`cityLongitude` are optional. When both are present, the backend computes straight-line distance and per-mode travel-time estimates for each resolved location; when absent, distance is omitted and transportation options fall back to `0`-minute placeholders.
 
-_Validation (before any LLM spend or rate-limit reservation): `deviceId` must be a string; the profile's required arrays (`interests`, `growthAreas`, `vibe`, `budget`, `transportation`, `locationPreferences`) must be present and non-empty and `city` a non-empty string, all within length caps; `excludeTitles` (if present) is a bounded string array. A missing/malformed field returns `invalid-argument`._
+_Validation (before any LLM spend or rate-limit reservation): the profile's required arrays (`interests`, `growthAreas`, `vibe`, `budget`, `transportation`, `locationPreferences`) must be present and non-empty and `city` a non-empty string, all within length caps; `excludeTitles` (if present) is a bounded string array. A missing/malformed field returns `invalid-argument`._
 
 **Caching & pre-generation:** On serve, the backend persists today's batch and enqueues a **Cloud Task** to pre-generate the next batch, so subsequent days are instant. A stored batch is invalidated when the profile changes (its hash no longer matches) or after a TTL (7 days).
 
@@ -103,8 +102,7 @@ Generate **one** quest tailored to a freeform user prompt. The backend first pla
 ```json
 {
   "prompt": "string (the user's freeform description)",
-  "profile": { "...": "a full UserProfile (see generateCuratedQuests)" },
-  "deviceId": "string"
+  "profile": { "...": "a full UserProfile (see generateCuratedQuests)" }
 }
 ```
 
@@ -185,7 +183,7 @@ Enforced **server-side**, per **`request.auth.uid`** (the verified Firebase Auth
 
 Why: the old reserve-then-rollback burned the full day if a >60s generation was killed before rollback could run. Now a killed run costs the user **at most ~2.5 min**, and the 24h gate only exists once quests actually landed. Function timeout is **120s** (150s pending TTL stays ≥ the timeout so a still-running generation can't be double-entered).
 
-_`deviceId` remains the **pre-generation cache key only** — it is not an identity and is never used for rate limiting._
+_Identity is the authenticated `request.auth.uid` throughout — it keys both the rate limit (`user_rate_limits/{uid}`) and the pre-generation cache (`pregen_cache/{uid}`). The client sends no identity field; there is no `deviceId`._
 
 _This is unrelated to the multi-provider LLM router, which applies its own free-tier-aware distribution across providers (see "Multi-provider LLM routing") to avoid provider 429s — infrastructure, not a user-facing limit._
 
@@ -240,7 +238,7 @@ Every LLM pass above goes through a provider-agnostic routing layer rather than 
 - **Providers:** Gemini (primary), Groq, Mistral, Cerebras — all free-tier, integrated via the Vercel AI SDK with Zod-validated structured output.
 - **Global rate-aware distribution:** a Firestore-backed multi-window (per-minute + per-day) limiter, keyed per model, spreads load across providers to stretch each free quota; a model is skipped when any of its windows is exhausted.
 - **Failover:** on a rate-limit / transient / schema-validation error, the router drops to the next provider in the class and drains the failed model's window so subsequent calls route elsewhere. It fails open (static priority order) if the limiter store is unavailable, so generation never blocks on it.
-- The chosen provider/model is invisible to the app — only the quest contract above is returned. (Each pipeline stage's latency + the AI provider/model is recorded server-side in the **PII-free `logs`** collection for the load/latency dashboard — no profile, prompt, response, or device id.)
+- The chosen provider/model is invisible to the app — only the quest contract above is returned. (Each pipeline stage's latency + the AI provider/model is recorded server-side in the **PII-free `logs`** collection for the load/latency dashboard — no profile, prompt, or response.)
 
 ### Security
 

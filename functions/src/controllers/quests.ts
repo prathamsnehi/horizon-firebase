@@ -81,7 +81,7 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
  * Cache-first: returns today's already-served batch (idempotent), else serves a
  * valid pre-generated batch, else generates synchronously. After serving, it
  * enqueues a Cloud Task to pre-generate the next batch. Count is server-controlled
- * (CURATED_BATCH_SIZE); the request carries only { profile, deviceId, excludeTitles? }.
+ * (CURATED_BATCH_SIZE); the request carries only { profile, excludeTitles? }.
  */
 export const generateCuratedQuests = functions.https.onCall(
   { enforceAppCheck: true, secrets: LLM_SECRETS },
@@ -97,7 +97,7 @@ export const generateCuratedQuests = functions.https.onCall(
 
     // C: validate structure + content before any spend or slot reservation.
     const data = request.data as CuratedQuestRequest;
-    if (!data || typeof data !== "object" || typeof data.deviceId !== "string") {
+    if (!data || typeof data !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
     }
     const profileErr = validateProfilePayload(data.profile);
@@ -105,7 +105,7 @@ export const generateCuratedQuests = functions.https.onCall(
     const excludeErr = validateExcludeTitles(data.excludeTitles);
     if (excludeErr) throw new functions.https.HttpsError("invalid-argument", excludeErr);
 
-    const { profile, deviceId, excludeTitles } = data;
+    const { profile, excludeTitles } = data;
 
     // B: reserve the per-uid 24h curated slot (transactional, server time).
     const reservation = await reserveRateLimitSlot(uid, "curated");
@@ -119,7 +119,7 @@ export const generateCuratedQuests = functions.https.onCall(
 
     try {
       const hash = hashProfile(profile);
-      const cache = await getPregenCache(deviceId);
+      const cache = await getPregenCache(uid);
 
       // A cached batch is usable only if it exists, was built for this exact
       // profile, and hasn't gone stale. Caching/pre-gen is a cost optimization,
@@ -141,9 +141,9 @@ export const generateCuratedQuests = functions.https.onCall(
 
       // Invalidate the consumed cache entry so a failed re-gen can't re-serve
       // the same batch...
-      await clearPregenBatch(deviceId);
+      await clearPregenBatch(uid);
       // ...and queue up the next one so the following request is instant.
-      await enqueuePregen({ deviceId, profile });
+      await enqueuePregen({ uid, profile });
       // Flush the best-effort stage logs before the container can freeze.
       await flushLogs();
 
@@ -191,7 +191,7 @@ export const generateUserDescribedQuest = functions.https.onCall(
 
     // C: validate structure + content before any spend or slot reservation.
     const data = request.data as DescribedQuestRequest;
-    if (!data || typeof data !== "object" || typeof data.deviceId !== "string") {
+    if (!data || typeof data !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
     }
     const promptErr = validateDescribePrompt(data.prompt);
