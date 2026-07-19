@@ -82,7 +82,7 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
  * Cache-first: returns today's already-served batch (idempotent), else serves a
  * valid pre-generated batch, else generates synchronously. After serving, it
  * enqueues a Cloud Task to pre-generate the next batch. Count is server-controlled
- * (CURATED_BATCH_SIZE); the request carries only { profile, deviceId, excludeTitles? }.
+ * (CURATED_BATCH_SIZE); the request carries only { profile, excludeTitles? }.
  */
 export const generateCuratedQuests = functions.https.onCall(
   { enforceAppCheck: true, secrets: LLM_SECRETS },
@@ -99,7 +99,7 @@ export const generateCuratedQuests = functions.https.onCall(
     return runTrace({ type: "curated", uid }, async () => {
       // C: validate structure + content before any spend or slot reservation.
       const data = request.data as CuratedQuestRequest;
-      if (!data || typeof data !== "object" || typeof data.deviceId !== "string") {
+      if (!data || typeof data !== "object") {
         setTraceField({ outcome: "invalid" });
         throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
       }
@@ -114,8 +114,7 @@ export const generateCuratedQuests = functions.https.onCall(
         throw new functions.https.HttpsError("invalid-argument", excludeErr);
       }
 
-      const { profile, deviceId, excludeTitles } = data;
-      setTraceField({ deviceId });
+      const { profile, excludeTitles } = data;
       recordSpan("request", { meta: { profile, excludeTitles } });
 
       // B: reserve the per-uid 24h curated slot (transactional, server time).
@@ -138,7 +137,7 @@ export const generateCuratedQuests = functions.https.onCall(
 
       try {
         const hash = hashProfile(profile);
-        const cache = await getPregenCache(deviceId);
+        const cache = await getPregenCache(uid);
 
         // A cached batch is usable only if it exists, was built for this exact
         // profile, and hasn't gone stale. Caching/pre-gen is a cost optimization,
@@ -168,13 +167,15 @@ export const generateCuratedQuests = functions.https.onCall(
           batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
         }
 
-        // Invalidate the consumed cache entry so a failed re-gen can't re-serve
-        // the same batch...
-        await clearPregenBatch(deviceId);
-        // ...and queue up the next one so the following request is instant.
-        await enqueuePregen({ deviceId, profile });
-        // Flush the best-effort stage logs before the container can freeze.
-        await flushLogs();
+        // These three are independent and all best-effort — run them together:
+        // invalidate the consumed cache entry (so a failed re-gen can't re-serve
+        // the same batch), queue up the next batch, and flush the stage logs
+        // before the container can freeze.
+        await Promise.all([
+          clearPregenBatch(uid),
+          enqueuePregen({ uid, profile }),
+          flushLogs(),
+        ]);
 
         console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cacheHit})`);
 
@@ -183,16 +184,18 @@ export const generateCuratedQuests = functions.https.onCall(
 
         // Embed hero-image bytes for the response ONLY, after persisting (so the
         // stored/cached batch stays reference-only and under Firestore's 1MB cap).
-        const responseBatch = await attachQuestPhotos(batch);
-
-        // Commit LAST (quests are landing): starts the 24h window at delivery and
-        // clears the pending stamp. A timeout before this leaves only the pending
-        // stamp, which self-expires in ≤150s — no burned day.
-        await span("ratelimit.commit", () => commitRateLimitSlot(uid, "curated"));
+        // The commit runs in parallel — both are past the point of no return
+        // (quests are landing), and photo attach is best-effort (never throws).
+        // Commit starts the 24h window at delivery; a timeout before this leaves
+        // only the pending stamp (self-expires in ≤90s — no burned day).
+        const [responseBatch] = await Promise.all([
+          attachQuestPhotos(batch),
+          span("ratelimit.commit", () => commitRateLimitSlot(uid, "curated")),
+        ]);
         return { quests: responseBatch };
       } catch (error) {
         // Generation failed — free the pending slot immediately (best-effort; a
-        // process death would let it self-expire within 150s instead).
+        // process death would let it self-expire within 90s instead).
         await releaseRateLimitSlot(uid, "curated");
         console.error("[generateCuratedQuests] Fatal error:", error);
         throw new functions.https.HttpsError(
@@ -225,7 +228,7 @@ export const generateUserDescribedQuest = functions.https.onCall(
     return runTrace({ type: "described", uid }, async () => {
       // C: validate structure + content before any spend or slot reservation.
       const data = request.data as DescribedQuestRequest;
-      if (!data || typeof data !== "object" || typeof data.deviceId !== "string") {
+      if (!data || typeof data !== "object") {
         setTraceField({ outcome: "invalid" });
         throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
       }
@@ -242,7 +245,6 @@ export const generateUserDescribedQuest = functions.https.onCall(
 
       const prompt = data.prompt.trim();
       const { profile } = data;
-      setTraceField({ deviceId: data.deviceId });
       recordSpan("request", { meta: { profile, prompt } });
 
       // Moderation — before spend and before reserving the slot.
@@ -283,15 +285,17 @@ export const generateUserDescribedQuest = functions.https.onCall(
         console.log("[generateUserDescribedQuest] served a described quest");
         setTraceField({ result: { quest } });
         // Embed the hero-image bytes for the response (nothing to persist — a
-        // described quest is one-off and isn't cached).
-        const [responseQuest] = await attachQuestPhotos([quest]);
-
-        // Commit LAST (quest is landing): starts the 24h window at delivery.
-        await span("ratelimit.commit", () => commitRateLimitSlot(uid, "described"));
+        // described quest is one-off and isn't cached). Commit runs in parallel:
+        // the quest is landing and photo attach is best-effort (never throws).
+        // Commit starts the 24h window at delivery.
+        const [[responseQuest]] = await Promise.all([
+          attachQuestPhotos([quest]),
+          span("ratelimit.commit", () => commitRateLimitSlot(uid, "described")),
+        ]);
         return { quest: responseQuest };
       } catch (error) {
         // Generation failed — free the pending slot immediately (best-effort; a
-        // process death would let it self-expire within 150s instead).
+        // process death would let it self-expire within 90s instead).
         await releaseRateLimitSlot(uid, "described");
         console.error("[generateUserDescribedQuest] Fatal error:", error);
         throw new functions.https.HttpsError(

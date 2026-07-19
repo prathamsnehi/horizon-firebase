@@ -32,7 +32,7 @@ describe("tracer", () => {
         input: { x: 1 },
         onResult: () => ({ output: { y: 2 } }),
       });
-      setTraceField({ deviceId: "d1", result: { ok: true } });
+      setTraceField({ result: { ok: true } });
       return "value";
     });
 
@@ -42,7 +42,6 @@ describe("tracer", () => {
     const doc = mockSaveTrace.mock.calls[0][0];
     expect(doc.type).toBe("curated");
     expect(doc.uid).toBe("u1");
-    expect(doc.deviceId).toBe("d1");
     expect(doc.outcome).toBe("success");
     expect(doc.result).toEqual({ ok: true });
     expect(doc.spans.map((s: any) => s.stage)).toEqual(["a", "b"]);
@@ -56,7 +55,7 @@ describe("tracer", () => {
 
   it("stamps outcome:error and rethrows, still writing one doc", async () => {
     await expect(
-      runTrace({ type: "pregen", deviceId: "d" }, async () => {
+      runTrace({ type: "pregen", uid: "d" }, async () => {
         recordSpan("a", {});
         throw new Error("boom");
       })

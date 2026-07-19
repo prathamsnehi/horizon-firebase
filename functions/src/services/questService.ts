@@ -69,7 +69,7 @@ export async function generateBatch(
   count: number,
   excludeTitles: string[] = []
 ): Promise<QuestItem[]> {
-  // --- PASS 1: SCOUT ---
+  // --- STEP 1: SCOUT (LLM pass 1 — location concepts) ---
   const locationConcepts = await generateLocationConcepts(
     profile,
     count,
@@ -110,13 +110,13 @@ export async function generateBatch(
     output: { locations: enrichedLocations },
   });
 
-  // --- PASS 4: WRITER ---
+  // --- STEP 4: WRITER (LLM pass 2 — final quests) ---
   const finalQuests: QuestItem[] = [];
   if (enrichedLocations.length > 0) {
     finalQuests.push(...(await generateQuestsWriter(profile, enrichedLocations)));
   }
 
-  // --- STEP 4.5: GENERIC FALLBACK (deficit filling) ---
+  // --- STEP 5: GENERIC FALLBACK (deficit filling) ---
   const deficit = count - finalQuests.length;
   if (deficit > 0) {
     const reason = `deficit=${deficit} (writer produced ${finalQuests.length} of ${count}; resolved ${validLocations.length}/${locationConcepts.length} locations)`;
