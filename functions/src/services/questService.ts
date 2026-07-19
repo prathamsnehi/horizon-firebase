@@ -23,9 +23,9 @@ import {
  * otherwise we supply 0-minute placeholder options so the Writer still has valid
  * transport enums to choose from.
  */
-export function enrichLocations(
+function enrichLocations(
   profile: UserProfile,
-  locations: LocationInformation[]
+  locations: LocationInformation[],
 ): LocationInformation[] {
   return locations.map((loc) => {
     if (profile.cityLatitude != null && profile.cityLongitude != null) {
@@ -33,14 +33,14 @@ export function enrichLocations(
         profile.cityLatitude,
         profile.cityLongitude,
         loc.latitude,
-        loc.longitude
+        loc.longitude,
       );
       return {
         ...loc,
         distanceMiles: distance,
         transportationOptions: calculateAllTransportOptions(
           distance,
-          profile.transportation
+          profile.transportation,
         ),
       };
     }
@@ -66,13 +66,13 @@ export function enrichLocations(
 export async function generateBatch(
   profile: UserProfile,
   count: number,
-  excludeTitles: string[] = []
+  excludeTitles: string[] = [],
 ): Promise<QuestItem[]> {
-  // --- PASS 1: SCOUT ---
+  // --- STEP 1: SCOUT (LLM pass 1 — location concepts) ---
   const locationConcepts = await generateLocationConcepts(
     profile,
     count,
-    excludeTitles
+    excludeTitles,
   );
   if (locationConcepts.length === 0) {
     throw new Error("Pass 1 failed to generate location concepts.");
@@ -81,27 +81,33 @@ export async function generateBatch(
   // --- STEP 2: LOCATION RESOLUTION (parallel; latency logged) ---
   const tMaps = Date.now();
   const rawMapsResults = await Promise.all(
-    locationConcepts.map((concept) => getBestLocation(concept.textQuery))
+    locationConcepts.map((concept) => getBestLocation(concept.textQuery)),
   );
-  saveLog({ stage: "maps", latencyMs: Date.now() - tMaps, createdAt: Date.now() });
+  saveLog({
+    stage: "maps",
+    latencyMs: Date.now() - tMaps,
+    createdAt: Date.now(),
+  });
   const validLocations = rawMapsResults.filter(
-    (loc): loc is LocationInformation => loc !== null
+    (loc): loc is LocationInformation => loc !== null,
   );
 
   // --- STEP 3: DISTANCE & TRANSPORT MATH ---
   const enrichedLocations = enrichLocations(profile, validLocations);
 
-  // --- PASS 4: WRITER ---
+  // --- STEP 4: WRITER (LLM pass 2 — final quests) ---
   const finalQuests: QuestItem[] = [];
   if (enrichedLocations.length > 0) {
-    finalQuests.push(...(await generateQuestsWriter(profile, enrichedLocations)));
+    finalQuests.push(
+      ...(await generateQuestsWriter(profile, enrichedLocations)),
+    );
   }
 
-  // --- STEP 4.5: GENERIC FALLBACK (deficit filling) ---
+  // --- STEP 5: GENERIC FALLBACK (deficit filling) ---
   const deficit = count - finalQuests.length;
   if (deficit > 0) {
     finalQuests.push(
-      ...(await generateGenericQuests(profile, deficit, excludeTitles))
+      ...(await generateGenericQuests(profile, deficit, excludeTitles)),
     );
   }
 
@@ -120,7 +126,7 @@ export async function generateBatch(
  */
 export async function generateDescribed(
   prompt: string,
-  profile: UserProfile
+  profile: UserProfile,
 ): Promise<QuestItem | null> {
   const plan = await planDescribedQuest(prompt, profile);
 
@@ -148,7 +154,7 @@ export async function generateDescribed(
  * persisting the batch, on the value being returned to the client.
  */
 export async function attachQuestPhotos(
-  quests: QuestItem[]
+  quests: QuestItem[],
 ): Promise<QuestItem[]> {
   return Promise.all(
     quests.map(async (quest) => {
@@ -166,6 +172,6 @@ export async function attachQuestPhotos(
           photoContentType: photo.contentType,
         },
       };
-    })
+    }),
   );
 }

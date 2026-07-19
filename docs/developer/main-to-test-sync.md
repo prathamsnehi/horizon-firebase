@@ -79,6 +79,49 @@ these onto `uid` and drop the now-dead `deviceId` trace field:
   to the 60s default (same approach the callables took when they dropped
   `timeoutSeconds` in commit `124fe55`).
 
+## Pending: backend cleanup pass (leaner/coherence/perf)
+
+- [ ] **`functions/src/integrations/maps.ts`** — `getTopLocation` /
+  `getRandomLocation` moved to the bottom of the file (below `fetchPlacePhotoBytes`),
+  bodies unchanged, under a "not currently wired in" section comment. Purely
+  cosmetic reorder. _(Note: `test`'s `maps.ts` has the richer
+  `fetchPlacePhotoBytes` returning `{ base64, contentType, bytes }` — leave that
+  as-is; only the function ordering moves.)_
+
+- [ ] **`functions/src/integrations/firestore.ts`** — delete the unused
+  `deleteUserRateLimit(uid)` function (account deletion is handled by the
+  `delete-user-data` extension, not this).
+
+- [ ] **`functions/src/types.ts`** — `LogDocument.stage` union gains `"planner"`.
+
+- [ ] **`functions/src/llm/tasks.ts`** — widen `logCall`'s `stage` param to
+  include `"planner"`; add `logCall("generic", result)` in `generateGenericQuests`
+  and `logCall("planner", result)` in `planDescribedQuest` (these AI calls were
+  never logged). _(On `test` these also have `recordSpan` calls — keep those.)_
+
+- [ ] **`functions/src/services/questService.ts`** — step comments in
+  `generateBatch` renumbered to `STEP 1..5` (was `PASS 1 / STEP 2 / 3 / PASS 4 /
+  STEP 4.5`). Also confirm the `enrichLocations` `export` is dropped (done on
+  `main`). Cosmetic.
+
+- [ ] **`functions/src/utils/rateLimit.ts`** — `PENDING_TTL_MS` `150_000` →
+  `90_000` + refreshed comment (timeout is now 60s).
+
+- [ ] **`functions/src/tests/utils/rateLimit.test.ts`** — the invariant test
+  `PENDING_TTL_MS ≥ 120_000` → `≥ 60_000` (and its title).
+
+- [ ] **`functions/src/controllers/quests.ts`** — two hot-path parallelizations
+  + the `150s`→`90s` comment updates:
+  - Curated: `clearPregenBatch` + `enqueuePregen` + `flushLogs` collapsed into one
+    `Promise.all`; `attachQuestPhotos` + `commitRateLimitSlot` into another
+    `Promise.all([...])` destructured as `const [responseBatch] = …`.
+  - Described: `attachQuestPhotos([quest])` + `commitRateLimitSlot` into one
+    `Promise.all`, destructured `const [[responseQuest]] = …`.
+  - **Care on `test`:** the tracer version wraps `commitRateLimitSlot` in
+    `span("ratelimit.commit", …)` — put the `span(...)` call inside the
+    `Promise.all` in place of the bare `commitRateLimitSlot`, so the span still
+    records. Also update the `≤150s` / `within 150s` comments to `90s`.
+
 ---
 
 ### Verify on `test`

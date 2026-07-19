@@ -12,7 +12,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 
 ## ⭐ Three non-negotiables before public launch
 
-1. **✅ Server-side rate limiting** — shipped: per-**uid** (Firebase Auth) 24h window in `user_rate_limits/{uid}`, **crash/timeout-safe two-phase reservation** (pending stamp + 150s TTL; the durable 24h stamp is set only on delivery — a killed run costs ≤2.5 min, not the day). Both callables require a signed-in user. _(A global spend/call kill-switch is still a possible add-on but not built.)_
+1. **✅ Server-side rate limiting** — shipped: per-**uid** (Firebase Auth) 24h window in `user_rate_limits/{uid}`, **crash/timeout-safe two-phase reservation** (pending stamp + 90s TTL; the durable 24h stamp is set only on delivery — a killed run costs ≤1.5 min, not the day). Both callables require a signed-in user. _(A global spend/call kill-switch is still a possible add-on but not built.)_
 2. ✅**&#x20;App Check verified from a real Release build** — `enforceAppCheck: true` is set in code, but the production attestation path (App Attest / DeviceCheck) must be confirmed from a Release build on a physical device, not the DEBUG debug-provider.
 3. **✅ Maps key exposure eliminated** — the key is **no longer sent to clients at all**: photos are fetched server-side and embedded as `photoImageBase64` in the quest response (see [maps.ts](../../functions/src/integrations/maps.ts) `fetchPlacePhotoBytes` + [questService.ts](../../functions/src/services/questService.ts) `attachQuestPhotos`). The Kingfisher-restriction concern is moot. _Remaining (defense-in-depth): API-restrict the key to Places API in the console._
 
@@ -28,7 +28,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ Debug tokens registered dev-only; none in TestFlight/App Store builds (ops)
 - ✅ Grep git history for any committed key; rotate if found
 - ✅ Least-privilege function service accounts — currently the **default compute SA** (broad); tighten off default Editor
-- ✅ **Server-side rate limiting** — per-uid 24h window (`user_rate_limits/{uid}`), crash/timeout-safe two-phase reservation (pending + 150s TTL, commit-on-delivery) ([firestore.ts](../../functions/src/integrations/firestore.ts), [quests.ts](../../functions/src/controllers/quests.ts))
+- ✅ **Server-side rate limiting** — per-uid 24h window (`user_rate_limits/{uid}`), crash/timeout-safe two-phase reservation (pending + 90s TTL, commit-on-delivery) ([firestore.ts](../../functions/src/integrations/firestore.ts), [quests.ts](../../functions/src/controllers/quests.ts))
 - ✅ Auth required on both callables — `unauthenticated` if no signed-in Firebase Auth user (in addition to App Check)
 - ✅ Input size caps — prompt ≤300 chars, profile required-field + array/string length caps, bounded `excludeTitles` ([utils/validation.ts](../../functions/src/utils/validation.ts))
 - ✅ **Account-data deletion cleanup** — `user_rate_limits/{uid}` removed on Auth account deletion via the **Delete User Data extension** (configured in `firebase.json` + [extensions/delete-user-data.env](../../extensions/delete-user-data.env), `FIRESTORE_PATHS=user_rate_limits/{UID}`). Pending `firebase deploy --only extensions`

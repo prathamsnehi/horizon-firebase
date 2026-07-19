@@ -17,9 +17,11 @@ export const RATE_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
  * Lifetime of an in-flight reservation. MUST be ≥ the function timeout so a
  * still-running generation can't have its pending stamp expire and be double-
- * entered by a concurrent request. Function timeout is 120s; this is 150s.
+ * entered by a concurrent request. Function timeout is 60s; this is 90s (the
+ * 30s buffer covers commit-write time + clock skew). A killed run therefore
+ * costs the user at most ~90s, not the full day.
  */
-export const PENDING_TTL_MS = 150_000;
+export const PENDING_TTL_MS = 90_000;
 
 export interface ReservationEvaluation {
   allowed: boolean;

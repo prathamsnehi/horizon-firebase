@@ -28,7 +28,7 @@ import { RoutingResult } from "./types";
  * Best-effort (fire-and-forget inside saveLog).
  */
 function logCall(
-  stage: "scout" | "writer" | "generic",
+  stage: "scout" | "writer" | "generic" | "planner",
   result: RoutingResult<unknown>,
 ): void {
   saveLog({
@@ -141,6 +141,7 @@ export async function generateGenericQuests(
     prompt,
     temperature: 0.8,
   });
+  logCall("generic", result);
   const rawQuests = result.object.quests ?? [];
 
   return rawQuests.map((sq) => ({
@@ -166,5 +167,6 @@ export async function planDescribedQuest(
     schema: describePlanSchema,
     prompt: plannerPrompt,
   });
+  logCall("planner", result);
   return result.object;
 }
