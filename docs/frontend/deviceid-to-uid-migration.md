@@ -53,3 +53,17 @@ Old builds that still send `deviceId` will **not** break — Cloud Functions
 silently ignores unknown payload fields, and the server no longer reads it. So
 there's **no forced-update requirement**; ship the cleaned-up client whenever
 convenient.
+
+---
+
+## Separate change: rate-limit cooldown ceiling 150s → 90s
+
+Unrelated to the identity swap, but a frontend-facing behavior change in the same
+round: the short "in-flight / just-failed" cooldown on a `resource-exhausted`
+error dropped from **≤2.5 min (150s)** to **≤1.5 min (90s)** (the pending-slot
+TTL was tightened now that the function timeout is 60s).
+
+**Action:** if the client reads `error.details.retryAt` and counts down to it
+(the intended contract), **nothing to do** — it just resolves sooner. Only touch
+the client if it has a **hardcoded "come back in ~2.5 min" string or a fixed
+150s fallback timer** anywhere; change that copy/constant to ~1.5 min / 90s.

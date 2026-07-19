@@ -166,7 +166,7 @@ export interface PregenTaskPayload {
  * dashboard. Intentionally stores NO profile, prompt, response, or device id.
  */
 export interface LogDocument {
-  stage: "scout" | "maps" | "writer" | "generic";
+  stage: "scout" | "maps" | "writer" | "generic" | "planner";
   latencyMs: number; // wall-clock of the stage
   createdAt: number; // Unix timestamp in milliseconds
   // AI stages only:
