@@ -276,6 +276,16 @@ export async function clearPregenBatch(uid: string): Promise<void> {
 
 const RATE_LIMITS_COLLECTION = "user_rate_limits";
 
+// ⚠️⚠️⚠️ TEST-BRANCH ONLY — DO NOT PORT TO `main`. ⚠️⚠️⚠️
+// Personal dev uid(s) exempted from rate limiting so I can generate freely while
+// testing on the `test` deployment. This bypass MUST NEVER ship to production —
+// it hands unlimited LLM/Maps spend to anyone holding this uid. If you're syncing
+// changes to `main`, drop this constant and every `RATE_LIMIT_EXEMPT_UIDS` guard
+// below.
+const RATE_LIMIT_EXEMPT_UIDS = new Set<string>([
+  "wjydGLbytkdSoo76h3nI9i19N4z1", // me
+]);
+
 export type RateAction = "curated" | "described";
 
 /** Durable "delivered" stamp — the 24h window is measured from this. */
@@ -305,6 +315,10 @@ export async function reserveRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<RateReservation> {
+  // TEST-BRANCH ONLY — see RATE_LIMIT_EXEMPT_UIDS note above. Never port to main.
+  // Always allow, and write no pending stamp, so the exempt uid is never gated.
+  if (RATE_LIMIT_EXEMPT_UIDS.has(uid)) return { allowed: true };
+
   const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
   const lastField = lastFieldFor(action);
   const pendingField = pendingFieldFor(action);
@@ -337,6 +351,10 @@ export async function commitRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<void> {
+  // TEST-BRANCH ONLY — see RATE_LIMIT_EXEMPT_UIDS note above. Never port to main.
+  // No durable stamp for the exempt uid, so its 24h window never opens.
+  if (RATE_LIMIT_EXEMPT_UIDS.has(uid)) return;
+
   await getDb()
     .collection(RATE_LIMITS_COLLECTION)
     .doc(uid)
@@ -358,6 +376,10 @@ export async function releaseRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<void> {
+  // TEST-BRANCH ONLY — see RATE_LIMIT_EXEMPT_UIDS note above. Never port to main.
+  // The exempt uid never wrote a pending stamp, so there's nothing to release.
+  if (RATE_LIMIT_EXEMPT_UIDS.has(uid)) return;
+
   try {
     await getDb()
       .collection(RATE_LIMITS_COLLECTION)

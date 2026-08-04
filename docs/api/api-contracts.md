@@ -41,7 +41,7 @@ The user's **curated batch**. Cache-first: serves a pre-generated batch from Fir
 
 _Validation (before any LLM spend or rate-limit reservation): the profile's required arrays (`interests`, `growthAreas`, `vibe`, `budget`, `transportation`, `locationPreferences`) must be present and non-empty and `city` a non-empty string, all within length caps; `excludeTitles` (if present) is a bounded string array. A missing/malformed field returns `invalid-argument`._
 
-**Caching & pre-generation:** On serve, the backend persists today's batch and enqueues a **Cloud Task** to pre-generate the next batch, so subsequent days are instant. A stored batch is invalidated when the profile changes (its hash no longer matches) or after a TTL (7 days).
+**Caching & pre-generation:** On serve, the backend persists today's batch and enqueues a **Cloud Task** to pre-generate the next batch, so subsequent days are instant. A stored batch is invalidated when the profile changes (its hash no longer matches) or after a TTL (60 days).
 
 **App Behavior:** The app calls this and waits. A cache hit is fast; a miss (first time, or profile changed) takes a few seconds — show a "curating" state past ~2s. (The response no longer carries per-stage timings; those are logged server-side.)
 
