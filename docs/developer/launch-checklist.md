@@ -47,7 +47,7 @@ Related: [planned-changes.md](./planned-changes.md) (feature backlog), [api-cont
 - ✅ `maxInstances: 10` (runaway-cost guard)
 - ✅ Provider failover implemented + unit-tested; partial-success logic (null-filter + generic deficit-fill) implemented
 - ✅ Functions (us-central1) co-located with Firestore (nam5)
-- ✅ **Function timeout raised to 120s** on both generation callables + the pre-gen task (the 60s default was killing >60s two-pass runs). _Follow-up: size memory if needed._
+- ✅ **Function timeout at the 60s default** on both callables + the pre-gen task — reduced from a prior 120s after the LLM-router optimizations (instant failover, tuned rate windows) brought two-pass runs comfortably under 60s. _Follow-up: size memory if needed._
 - ✅ Cold-start decision — generation is 10–20s anyway, so skipping min-instances (and their cost) is reasonable; confirm
 - ✅ Partial-success paths + provider-failover **live drill** (bad key in staging) — code covered by unit tests; live drill not run
 - ✅ Pre-gen Cloud Task idempotency guard — re-delivery can double-generate/overwrite `nextBatch`
