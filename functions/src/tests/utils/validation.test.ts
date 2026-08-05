@@ -8,7 +8,7 @@ import {
 
 const goodProfile = {
   interests: ["Coffee"],
-  growthAreas: ["Trying new foods"],
+  comfortZoneEdges: ["Trying unfamiliar food"],
   vibe: ["Chill"],
   experimentationLevel: 3,
   budget: ["Cheap"],
@@ -54,6 +54,15 @@ describe("validateProfilePayload", () => {
   });
   it("rejects an empty required array", () => {
     expect(validateProfilePayload({ ...goodProfile, vibe: [] })).not.toBeNull();
+  });
+  it("rejects an empty comfortZoneEdges", () => {
+    expect(
+      validateProfilePayload({ ...goodProfile, comfortZoneEdges: [] })
+    ).not.toBeNull();
+  });
+  it("does not require the retired growthAreas field", () => {
+    // goodProfile has no growthAreas; it must still validate.
+    expect(validateProfilePayload(goodProfile)).toBeNull();
   });
   it("rejects a non-string array item", () => {
     expect(

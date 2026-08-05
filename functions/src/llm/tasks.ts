@@ -83,7 +83,16 @@ export async function generateQuestsWriter(
   logCall("writer", result);
   const rawQuests = result.object.quests ?? [];
 
+  // Verbatim guarantee: the client renders these back to the user, so an entry
+  // must be an EXACT string the user submitted. Drop anything the model
+  // rephrased or invented, preserve the model's (weight) order, cap at 3.
+  const allowedEdges = new Set(profile.comfortZoneEdges);
+
   return rawQuests.map((sq) => {
+    const pushesComfortZoneEdges = (sq.pushesComfortZoneEdges ?? [])
+      .filter((edge) => allowedEdges.has(edge))
+      .slice(0, 3);
+
     const originalLocation = locationsWithIds.find(
       (l) => l.id === sq.assignedLocationId,
     );
@@ -113,6 +122,7 @@ export async function generateQuestsWriter(
       difficulty: sq.difficulty,
       estimatedActivityMinutes: sq.estimatedActivityMinutes,
       categories: sq.categories,
+      pushesComfortZoneEdges,
       locationInformation: locationInfo,
     };
   });

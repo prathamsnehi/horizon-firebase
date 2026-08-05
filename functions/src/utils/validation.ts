@@ -14,7 +14,7 @@ export const MAX_EXCLUDE_TITLES = 100;
 // Profile fields that must be present, non-empty string arrays.
 const REQUIRED_STRING_ARRAYS = [
   "interests",
-  "growthAreas",
+  "comfortZoneEdges",
   "vibe",
   "budget",
   "transportation",
