@@ -22,7 +22,7 @@ import { getBestLocation, fetchPlacePhotoBytes } from "../../integrations/maps";
 
 const profile: UserProfile = {
   interests: ["food"],
-  growthAreas: [],
+  comfortZoneEdges: ["Talking to strangers"],
   vibe: ["chill"],
   experimentationLevel: 3,
   budget: ["moderate"],

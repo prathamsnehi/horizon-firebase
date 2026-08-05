@@ -17,7 +17,7 @@ export type TransportationMode =
 
 export interface UserProfile {
   interests: string[];
-  growthAreas: string[];
+  comfortZoneEdges: string[];
   vibe: string[];
   experimentationLevel: number; // e.g., 1 to 5
   budget: string[];
@@ -93,6 +93,12 @@ export interface QuestItem {
   difficulty: "easy" | "moderate" | "hard" | "extreme";
   estimatedActivityMinutes: number;
   categories: string[];
+
+  // Which of the user's comfort-zone edges this quest targets, ordered by weight
+  // (primary first, 1-3). Verbatim echoes of strings from the request's
+  // `comfortZoneEdges`. Present on location (writer) quests; omitted on generic
+  // fallback quests (client decodes absent → []).
+  pushesComfortZoneEdges?: string[];
 
   // Location-Based Properties:
   locationInformation?: LocationInformation;
