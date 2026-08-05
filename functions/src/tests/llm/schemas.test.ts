@@ -33,12 +33,21 @@ describe("writerQuestsSchema", () => {
         assignedLocationId: "loc_0",
         recommendedTransportationMode: "walking",
         locationDescription: "A cozy neighborhood spot.",
+        pushesComfortZoneEdges: ["Talking to strangers"],
       },
     ],
   };
 
   it("accepts a valid writer object", () => {
     expect(writerQuestsSchema.parse(valid).quests[0].title).toBe("T");
+  });
+
+  it("requires pushesComfortZoneEdges", () => {
+    const { pushesComfortZoneEdges, ...withoutEdges } = valid.quests[0];
+    void pushesComfortZoneEdges;
+    expect(() =>
+      writerQuestsSchema.parse({ quests: [withoutEdges] })
+    ).toThrow();
   });
 
   it("rejects a non-integer estimatedActivityMinutes", () => {

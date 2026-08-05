@@ -4,7 +4,7 @@ import { UserProfile, LocationInformation } from "../../types";
 describe("prompts utils", () => {
     const mockProfile: UserProfile = {
         interests: ["coffee", "hiking"],
-        growthAreas: ["socializing"],
+        comfortZoneEdges: ["Talking to strangers"],
         vibe: ["chill"],
         experimentationLevel: 3,
         budget: ["free"],
@@ -25,9 +25,15 @@ describe("prompts utils", () => {
         it("should compress the profile arrays into comma separated strings", () => {
             const prompt = buildLocationConceptsPrompt(mockProfile, 5);
 
-            expect(prompt).toContain("Interests: coffee,hiking");
-            expect(prompt).toContain("Vibe: chill");
-            expect(prompt).toContain("Location Prefs: neighborhood");
+            expect(prompt).toContain("Interests (flavor / where): coffee,hiking");
+            expect(prompt).toContain("Vibe (tone): chill");
+            expect(prompt).toContain("Location prefs: neighborhood");
+        });
+
+        it("should center the user's comfort-zone edges", () => {
+            const prompt = buildLocationConceptsPrompt(mockProfile, 5);
+
+            expect(prompt).toContain("COMFORT-ZONE EDGES (target these): Talking to strangers");
         });
     });
 
@@ -47,9 +53,17 @@ describe("prompts utils", () => {
 
         it("should include instructions for assignedLocationId and estimatedActivityMinutes", () => {
             const prompt = buildQuestWriterPrompt(mockProfile, []);
-            
+
             expect(prompt).toContain("'estimatedActivityMinutes' must reflect the activity time in minutes");
             expect(prompt).toContain("assignedLocationId");
+        });
+
+        it("should provide the edges and ask for a verbatim pushesComfortZoneEdges echo", () => {
+            const prompt = buildQuestWriterPrompt(mockProfile, []);
+
+            expect(prompt).toContain("Talking to strangers");
+            expect(prompt).toContain("pushesComfortZoneEdges");
+            expect(prompt).toContain("VERBATIM");
         });
     });
 

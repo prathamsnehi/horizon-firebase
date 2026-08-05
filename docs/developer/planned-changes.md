@@ -1,8 +1,8 @@
 # Horizon Backend — Planned Architectural Changes
 
-A living backlog of architectural changes under consideration but **not yet implemented**. This is a thinking space, not a commitment — items here are ideas to track, weigh, and sequence. When something ships, move any lasting detail into [production-architecture.md](./production-architecture.md) or [backend-roadmap.md](./backend-roadmap.md) and remove it from here.
+A living backlog of architectural changes under consideration but **not yet implemented**. This is a thinking space, not a commitment — items here are ideas to track, weigh, and sequence. When something ships, move any lasting detail into [production-architecture.md](./production-architecture.md) and remove it from here.
 
-Related docs: [production-architecture.md](./production-architecture.md) (the aspirational production design), [backend-roadmap.md](./backend-roadmap.md) (build order), [api-contracts.md](../api/api-contracts.md) (the contract source of truth).
+Related docs: [production-architecture.md](./production-architecture.md) (the aspirational production design), [api-contracts.md](../api/api-contracts.md) (the contract source of truth).
 
 _Last updated: 2026-07-02_
 
@@ -28,7 +28,6 @@ The per-user cache-first flow and describe mode are in place; these remain.
 
 - **PT-accurate daily reset** — currently UTC date keys; align to the provider/product timezone later.
 - **Fuller describe moderation** — currently a lightweight keyword blocklist + provider safety; add a real moderation pass.
-- ~~Full describe UI in the web client~~ — **done**: the `/app/create` compose screen calls `generateUserDescribedQuest` and commits the result as the active quest.
 - **Enable the Cloud Tasks API** in the project for pre-gen enqueue to work (ops).
 - Cross-user global pool — see #4.
 
@@ -58,12 +57,7 @@ Hash `city + vibe + interests` → serve a _shared_ batch across users. A cache 
 
 ## 5. Shed a Places API SKU tier (cost) — DONE
 
-Was: Enterprise + Atmosphere (top SKU), driven by `editorialSummary` (Atmosphere) plus `rating`/`userRatingCount` (Enterprise). Now dropped to **Text Search Pro** (\~5,000 free calls/month vs \~1,000; \~$0.032 vs \~$0.04 per call) by:
-
-- **Removing editorialSummary** — the short location summary is now written by the Writer LLM (free, quest-tailored) instead of bought from Maps. See [tasks.ts](../../functions/src/llm/tasks.ts) / [prompts.ts](../../functions/src/utils/prompts.ts).
-- **Removing rating/userRatingCount** — `getBestLocation` now selects a middle-ground place from the top few of Google's default relevance order (which already reflects popularity), instead of an explicit rating × review-volume score.
-
-_Note: fetching 10 candidates costs the same as fetching 1 — Text Search bills per call, not per result._
+Dropped from Enterprise + Atmosphere to **Text Search Pro** (\~5,000 free calls/month, \~$0.032/call) by removing `editorialSummary` (the location summary is now written by the Writer LLM) and `rating`/`userRatingCount` (`getBestLocation` picks a middle-ground place from Google's default relevance order). Kept for reference; nothing left to do here.
 
 ---
 

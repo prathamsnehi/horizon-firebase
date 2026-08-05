@@ -20,7 +20,7 @@ The user's **curated batch**. Cache-first: serves a pre-generated batch from Fir
 {
   "profile": {
     "interests": ["string"],
-    "growthAreas": ["string"],
+    "comfortZoneEdges": ["string"],
     "vibe": ["string"],
     "experimentationLevel": 1,
     "budget": ["string"],
@@ -39,11 +39,11 @@ The user's **curated batch**. Cache-first: serves a pre-generated batch from Fir
 
 `cityLatitude`/`cityLongitude` are optional. When both are present, the backend computes straight-line distance and per-mode travel-time estimates for each resolved location; when absent, distance is omitted and transportation options fall back to `0`-minute placeholders.
 
-_Validation (before any LLM spend or rate-limit reservation): the profile's required arrays (`interests`, `growthAreas`, `vibe`, `budget`, `transportation`, `locationPreferences`) must be present and non-empty and `city` a non-empty string, all within length caps; `excludeTitles` (if present) is a bounded string array. A missing/malformed field returns `invalid-argument`._
+_Validation (before any LLM spend or rate-limit reservation): the profile's required arrays (interests, comfortZoneEdges, vibe, budget, transportation, locationPreferences) must be present and non-empty and city a non-empty string, all within length caps; excludeTitles (if present) is a bounded string array. A missing/malformed field returns invalid-argument._
 
-**Caching & pre-generation:** On serve, the backend persists today's batch and enqueues a **Cloud Task** to pre-generate the next batch, so subsequent days are instant. A stored batch is invalidated when the profile changes (its hash no longer matches) or after a TTL (7 days).
+**Caching & pre-generation:** On serve, the backend persists today's batch and enqueues a **Cloud Task** to pre-generate the next batch, so subsequent days are instant. A stored batch is invalidated when the profile changes (its hash no longer matches) or after a TTL (60 days).
 
-**App Behavior:** The app calls this and waits. A cache hit is fast; a miss (first time, or profile changed) takes a few seconds — show a "curating" state past ~2s. (The response no longer carries per-stage timings; those are logged server-side.)
+**App Behavior:** The app calls this and waits. A cache hit is fast; a miss (first time, or profile changed) takes a few seconds — show a "curating" state past \~2s. (The response no longer carries per-stage timings; those are logged server-side.)
 
 **Response:**
 
@@ -56,6 +56,7 @@ _Validation (before any LLM spend or rate-limit reservation): the profile's requ
             "difficulty": "easy" | "moderate" | "hard" | "extreme",
             "estimatedActivityMinutes": 60,
             "categories": ["string"],
+            "pushesComfortZoneEdges": ["string"],
             "locationInformation": {
                 "name": "string",
                 "address": "string",
@@ -84,10 +85,11 @@ _Validation (before any LLM spend or rate-limit reservation): the profile's requ
 
 - `estimatedActivityMinutes` is an integer count of minutes for the activity itself and **excludes** travel time. (Maps directly to `Quest.estimatedActivityMinutes`.)
 - `locationInformation` is omitted for generic (no-location) quests — these are produced as a fallback when Maps cannot resolve enough real locations. The client should treat its absence as "at-home / location-agnostic."
+- `pushesComfortZoneEdges` is the comfort-zone edge(s) the quest targets, echoed **verbatim** from the request's `comfortZoneEdges` (exact casing/wording), ordered by weight (primary first), 1–3 entries. The server filters the model's output against the submitted edges, so entries are always genuine user strings. **Omitted (or \[]) on generic quests**; the client decodes absent → `[]` and renders nothing. Dense surfaces render only the first entry + a `+N`, so the order is load-bearing.
 - `distanceMiles` and `transportationOptions` are only meaningful when the request included `cityLatitude`/`cityLongitude`. Exactly one option has `isRecommended: true`, chosen by the Writer model. Without city coords, `distanceMiles` is omitted and `transportationOptions` come back as `0`-minute placeholders.
 - **Hero image:** `photoImageBase64` is the base64-encoded image bytes (with `photoContentType`, e.g. `image/jpeg`), fetched server-side and embedded in the response — **the Maps API key is never sent to the client.** The client should decode it once, store it on the quest, and render from the stored bytes (no image URL to load). It is **absent** when the place has no photo or the fetch failed → show a placeholder. `photoReference` is the durable Places photo handle used server-side; clients can ignore it.
 
-_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photo), that field safely defaults to an empty string `""` (or `0` for coordinates); `photoImageBase64`/`photoContentType` are simply omitted._
+_Note: If the Google Maps API fails to return a specific location field (e.g., the place has no photo), that field safely defaults to an empty string "" (or 0 for coordinates); photoImageBase64/photoContentType are simply omitted._
 
 ---
 
@@ -116,12 +118,13 @@ Generate **one** quest tailored to a freeform user prompt. The backend first pla
     "difficulty": "easy" | "moderate" | "hard" | "extreme",
     "estimatedActivityMinutes": 60,
     "categories": ["string"],
+    "pushesComfortZoneEdges": ["string"],
     "locationInformation": { "...": "present only when the quest is tied to a real place" }
   }
 }
 ```
 
-Note the response is a **single `quest` object** (not an array). The client sets `origin = .described` and stores the user's `prompt` in `userPrompt`.
+Note the response is a **single quest object** (not an array). The client sets `origin = .described` and stores the user's `prompt` in `userPrompt`.
 
 **Rate limiting:** 1 per 24h per user (see [Rate Limiting](#rate-limiting)). The prompt is trimmed and capped (max 300 chars) and passes a lightweight moderation check — an empty/oversized/blocked prompt returns `invalid-argument` **before** any spend or slot reservation.
 
@@ -160,16 +163,16 @@ Errors are surfaced as Firebase `HttpsError`, so the client receives a standard 
 
 - `unauthenticated` — no signed-in Firebase Auth user. Message: "Sign in to generate quests."
 - `invalid-argument` — the payload failed validation (missing/malformed fields, oversized/empty prompt), or a described prompt was blocked by moderation. The message text is user-surfaceable.
-- `resource-exhausted` — the lane is currently gated. Carries a **`details`** object: `{ retryAt: <ISO8601>, scope: "curated" | "described" }`. The client just reads `details.retryAt` and counts down to it — the value is either the full 24h gate (after a successful delivery) **or** a short ≤1.5-min cooldown (a generation is in flight, or a previous one failed/was killed). Same shape either way.
+- `resource-exhausted` — the lane is currently gated. Carries a **details** object: `{ retryAt: <ISO8601>, scope: "curated" | "described" }`. The client just reads `details.retryAt` and counts down to it — the value is either the full 24h gate (after a successful delivery) **or** a short ≤1.5-min cooldown (a generation is in flight, or a previous one failed/was killed). Same shape either way.
 - `internal` — generation failed downstream (e.g., Scout produced no concepts, or the Writer produced nothing). Show a retry button. A failed generation does **not** consume the 24h slot — its short pending cooldown clears (or self-expires) and a retry then succeeds.
 
-_Both callables enforce **App Check** (`enforceAppCheck: true`) **and** require a signed-in Firebase Auth user. App Check failures are rejected by Firebase before the handler runs; the missing-auth check is the first thing the handler does._
+_Both callables enforce App Check (enforceAppCheck: true) and require a signed-in Firebase Auth user. App Check failures are rejected by Firebase before the handler runs; the missing-auth check is the first thing the handler does._
 
 The client should also handle transport-level failures (no network) as its own offline state, independent of these server codes.
 
 ## Rate Limiting
 
-Enforced **server-side**, per **`request.auth.uid`** (the verified Firebase Auth token — never a payload field, which is spoofable), on a **24h window** using **server time**. One *delivered* generation per lane per 24h:
+Enforced **server-side**, per **request.auth.uid** (the verified Firebase Auth token — never a payload field, which is spoofable), on a **24h window** using **server time**. One _delivered_ generation per lane per 24h:
 
 - `generateCuratedQuests` — **1 per 24h**.
 - `generateUserDescribedQuest` — **1 per 24h**, independent lane.
@@ -177,13 +180,13 @@ Enforced **server-side**, per **`request.auth.uid`** (the verified Firebase Auth
 **Crash/timeout-safe two-phase reservation** (state in `user_rate_limits/{uid}`):
 
 - **Durable stamp** `lastCuratedAt`/`lastDescribedAt` — the 24h window is measured from here, and it's set **only on successful delivery** (at commit, right before the response is returned).
-- **Pending stamp** `pendingCuratedAt`/`pendingDescribedAt` — written inside a transaction *before* generation. A concurrent call, or a retry within **~1.5 min (90s)**, is denied against it (this is what blocks duplicates).
+- **Pending stamp** `pendingCuratedAt`/`pendingDescribedAt` — written inside a transaction _before_ generation. A concurrent call, or a retry within **\~1.5 min (90s)**, is denied against it (this is what blocks duplicates).
 - On **success**: commit — set `lastAt = now`, clear the pending stamp → the 24h window starts at delivery.
 - On **failure**: best-effort clear the pending stamp (frees immediately). **If the process is killed** (e.g. the platform timeout), the pending stamp simply self-expires within 90s — no rollback code has to run.
 
-Why: the old reserve-then-rollback burned the full day if a generation was killed before rollback could run. Now a killed run costs the user **at most ~1.5 min**, and the 24h gate only exists once quests actually landed. Function timeout is **60s** (the 90s pending TTL stays ≥ the timeout so a still-running generation can't be double-entered).
+Why: the old reserve-then-rollback burned the full day if a generation was killed before rollback could run. Now a killed run costs the user **at most \~1.5 min**, and the 24h gate only exists once quests actually landed. Function timeout is **60s** (the 90s pending TTL stays ≥ the timeout so a still-running generation can't be double-entered).
 
-_Identity is the authenticated `request.auth.uid` throughout — it keys both the rate limit (`user_rate_limits/{uid}`) and the pre-generation cache (`pregen_cache/{uid}`). The client sends no identity field; there is no `deviceId`._
+_Identity is the authenticated request.auth.uid throughout — it keys both the rate limit (user_rate_limits/{uid}) and the pre-generation cache (pregen_cache/{uid}). The client sends no identity field; there is no deviceId._
 
 _This is unrelated to the multi-provider LLM router, which applies its own free-tier-aware distribution across providers (see "Multi-provider LLM routing") to avoid provider 429s — infrastructure, not a user-facing limit._
 
@@ -229,7 +232,7 @@ Mobile App                    Cloud Function                     External APIs
 4. **Pass 2 (Writer):** Sends the profile AND the enriched Maps locations back to the **LLM router** (quality model class; Gemini `gemini-3.5-flash` primary) with structured JSON to write highly-tailored quests. The model selects an `assignedLocationId` and a `recommendedTransportationMode`, and writes a short (1–2 sentence) `locationDescription` for the place; the backend re-attaches the exact, untouched Maps data by ID afterward (and injects that `locationDescription`) so the LLM cannot corrupt real addresses/coordinates. (The location summary comes from the LLM — not Maps, whose editorial-summary field is a premium tier.)
 5. **Generic fallback (deficit filling):** If fewer locations resolved than the batch size, the shortfall is filled with location-agnostic quests via a separate router call. These come back **without** `locationInformation`.
 6. The Places API returns a **photo reference** (`name` field) for each photo — not a URL or raw image data. Example: `"places/ChIJN1t.../photos/AUacShh3Z..."`. This durable reference (`photoReference`) is what gets stored in the cache.
-7. **At serve time** — after persisting the reference-only batch — the Cloud Function fetches the image bytes itself (`GET https://places.googleapis.com/v1/{name}/media?key=API_KEY&maxHeightPx=600`, key used **server-side only**) and embeds them as base64 (`photoImageBase64` + `photoContentType`) in the response. The key is never in the response, and the image is **never persisted server-side** (Firestore 1 MB limit + Places-content policy). Best-effort: a failed fetch just omits the image (client shows a placeholder). Consequence: a cache-hit serve gains ~0.5–1 s for the parallel photo fetch.
+7. **At serve time** — after persisting the reference-only batch — the Cloud Function fetches the image bytes itself (`GET https://places.googleapis.com/v1/{name}/media?key=API_KEY&maxHeightPx=600`, key used **server-side only**) and embeds them as base64 (`photoImageBase64` + `photoContentType`) in the response. The key is never in the response, and the image is **never persisted server-side** (Firestore 1 MB limit + Places-content policy). Best-effort: a failed fetch just omits the image (client shows a placeholder). Consequence: a cache-hit serve gains \~0.5–1 s for the parallel photo fetch.
 
 ### Multi-provider LLM routing
 
@@ -238,7 +241,7 @@ Every LLM pass above goes through a provider-agnostic routing layer rather than 
 - **Providers:** Gemini (primary), Groq, Mistral, Cerebras — all free-tier, integrated via the Vercel AI SDK with Zod-validated structured output.
 - **Global rate-aware distribution:** a Firestore-backed multi-window (per-minute + per-day) limiter, keyed per model, spreads load across providers to stretch each free quota; a model is skipped when any of its windows is exhausted.
 - **Failover:** on a rate-limit / transient / schema-validation error, the router drops to the next provider in the class and drains the failed model's window so subsequent calls route elsewhere. It fails open (static priority order) if the limiter store is unavailable, so generation never blocks on it.
-- The chosen provider/model is invisible to the app — only the quest contract above is returned. (Each pipeline stage's latency + the AI provider/model is recorded server-side in the **PII-free `logs`** collection for the load/latency dashboard — no profile, prompt, or response.)
+- The chosen provider/model is invisible to the app — only the quest contract above is returned. (Each pipeline stage's latency + the AI provider/model is recorded server-side in the **PII-free logs** collection for the load/latency dashboard — no profile, prompt, or response.)
 
 ### Security
 
@@ -253,7 +256,7 @@ The app doesn't know about the LLM router or the orchestration details. It just 
 ### Image handling on the app side
 
 - The hero image arrives **inside the quest response** as `photoImageBase64` — no image URL, no key, no Kingfisher/network fetch for it.
-- The app **decodes it once** (e.g. `Data(base64Encoded:)`), **stores the `Data` on the quest object** (SwiftData), and renders from the stored bytes thereafter — offline, instant on repeat views.
+- The app **decodes it once** (e.g. `Data(base64Encoded:)`), **stores the Data on the quest object** (SwiftData), and renders from the stored bytes thereafter — offline, instant on repeat views.
 - The bytes live and die with the quest (discarded on completion); no separate cache to manage.
 - If `photoImageBase64` is absent (place had no photo, or the server-side fetch failed), show a bundled placeholder.
 - Non-location quests use pre-loaded placeholder images bundled with the app — no network call needed

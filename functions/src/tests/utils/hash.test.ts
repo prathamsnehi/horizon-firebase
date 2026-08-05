@@ -3,7 +3,7 @@ import { UserProfile } from "../../types";
 
 const base: UserProfile = {
   interests: ["coffee", "hiking"],
-  growthAreas: ["socializing"],
+  comfortZoneEdges: ["Talking to strangers"],
   vibe: ["chill"],
   experimentationLevel: 3,
   budget: ["free"],

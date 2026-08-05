@@ -14,7 +14,7 @@ import { UserProfile } from "../types";
 export function hashProfile(profile: UserProfile): string {
   const canonical = {
     interests: [...profile.interests].sort(),
-    growthAreas: [...profile.growthAreas].sort(),
+    comfortZoneEdges: [...profile.comfortZoneEdges].sort(),
     vibe: [...profile.vibe].sort(),
     experimentationLevel: profile.experimentationLevel,
     budget: [...profile.budget].sort(),

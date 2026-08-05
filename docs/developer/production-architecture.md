@@ -4,11 +4,11 @@ This document outlines the production-level architectural decisions and system d
 
 ## 1. Fault Tolerance & Limiting the "Blast Radius"
 
-Currently, the generation pipeline is monolithic: if one component fails, the entire request of 10 quests fails. In a production system, we must design for **Partial Success**.
+The pipeline is designed for **Partial Success** — no single component failure sinks the whole batch.
 
-- **Best-Effort Delivery:** If the Scout AI (Pass 1) generates 10 concepts, but the Google Maps API only successfully resolves 7 of them, we should _not_ throw an error. We simply pass those 7 to the Writer AI (Pass 2) and return a batch of 7 quests to the user.
-- **Graceful Degradation (No-Location Fallback):** If the Google Maps API goes down entirely, or the user is in an area with zero mapping coverage, the app shouldn't break. We should have a fallback `generateNoLocationQuests` prompt that generates at-home activities (e.g., journaling, meditation, home workouts, deep-work sessions) that skip the Maps API entirely.
-- **Circuit Breakers:** If an API (like Maps or Gemini) starts failing consistently, we should trip a circuit breaker to stop hammering the API and immediately serve cached/fallback content.
+- **Best-Effort Delivery:** _Shipped._ If the Scout resolves fewer concepts than the batch size (`CURATED_BATCH_SIZE`, 3), we don't throw — we pass whatever resolved to the Writer and continue.
+- **Graceful Degradation (No-Location Fallback):** _Shipped_ as `generateGenericQuests` — the deficit is filled with location-agnostic quests (at-home / anywhere activities) that skip the Maps API entirely, so a Maps outage or a zero-coverage area still returns a full batch.
+- **Circuit Breakers:** _Partial._ The LLM router already drains a model's rate window on a 429/failure so subsequent calls route elsewhere; a true cross-request circuit breaker (trip + serve cached/fallback on sustained failure) is still an open idea.
 
 ## 2. Scaling, Costs, and Rate Limiting
 
@@ -26,8 +26,7 @@ When designing this for millions of users, we must answer these questions:
 
 ### A. Idempotency (The Double-Tap Problem)
 
-What happens if the iOS app sends a `generateCuratedQuests` request, but the user goes into a tunnel and loses connection? The app will automatically retry the request. If we aren't careful, the backend could run the expensive LLM pipeline _twice_. (Currently unmitigated: the per-day idempotent re-serve that used to absorb same-day retries was removed along with the daily caps during the testing phase, so a retry regenerates. A dedicated `requestId` guard is the robust general solution to add before launch.)
-**Solution:** The iOS app must generate a unique `requestId` (UUID) and send it with the payload. The backend checks Redis or Firestore: "Have I seen this requestId in the last 5 minutes?" If yes, ignore the duplicate.
+What happens if the iOS app retries a `generateCuratedQuests` request after a dropped connection? We don't want to run the expensive pipeline twice. _Largely mitigated:_ the two-phase rate-limit reservation writes a short-lived pending stamp before generation, so a concurrent call or a retry within the pending TTL (90s) is denied against it — and the durable 24h stamp blocks a same-day repeat. A dedicated `requestId` de-dupe (checked in Firestore over a few minutes) would still be the more general guard if finer-grained retry semantics are ever needed.
 
 ### B. Toxicity, Safety, and Physical Danger
 
@@ -49,5 +48,4 @@ If quests start failing, how will we know?
 
 ### D. Data Privacy (PII Leakage)
 
-We are sending user profiles to Google/OpenAI.
-**Solution:** We must ensure the `UserProfile` object sent to the prompt _never_ contains names, emails, phone numbers, or exact home addresses. We only send abstract concepts (city name, interests, budget).
+We send user profiles to third-party LLM providers (Gemini/Groq/Mistral/Cerebras). _Handled:_ the `UserProfile` carries only abstract preferences (city, interests, vibe, budget, growth areas) — never names, emails, phone numbers, or exact home addresses — and input validation enforces the shape before any prompt is built. The observability `logs` collection is PII-free by design (stage/provider/model/latency only).
