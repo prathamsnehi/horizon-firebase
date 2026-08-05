@@ -16,39 +16,32 @@ export function buildLocationConceptsPrompt(
   const interests = profile.interests.join(",") || "None";
   const vibe = profile.vibe.join(",") || "None";
   const locationPreferences = profile.locationPreferences.join(",") || "None";
+  const edges = profile.comfortZoneEdges.join(" | ") || "None";
 
-  return `You are a sharp, well-traveled local in ${profile.city} with genuinely great taste — the kind of person whose recommendations people actually act on. Produce EXACTLY ${count} Google Maps search queries that each resolve to a specific, real, well-regarded place worth going out of your way for.
+  return `You are a sharp, well-traveled local in ${profile.city} with genuinely great taste. Produce EXACTLY ${count} Google Maps search queries. Each must resolve to a specific, real, well-regarded place where the user can do a small challenge that pushes one of their COMFORT-ZONE EDGES.
 
-USER:
-Interests: ${interests} | Vibe: ${vibe} | Location Prefs: ${locationPreferences}
+THE POINT (matters most):
+Horizon sends people to do the things they avoid. Their edges below are what they're reluctant or afraid to do. Every query must set up a place where acting on an edge is natural. Interests decide WHERE and WHAT KIND of place; the EDGE decides what makes it a stretch.
+Example: edge "Talking to strangers" + interest "coffee" -> "specialty coffee bar with counter seating in ${profile.city}" (a place where striking up a conversation is natural) — NOT just "highly-rated coffee shop".
+
+COMFORT-ZONE EDGES (target these): ${edges}
+Interests (flavor / where): ${interests} | Vibe (tone): ${vibe} | Location prefs: ${locationPreferences}
 City: ${profile.city}
 
-HOW TO CHOOSE (this matters most):
-- Quality over novelty. Recommend places you'd genuinely vouch for — not obscure things picked to seem quirky. A great neighborhood spot beats a weird one.
-- Go deep, not wide. Do NOT map one interest to one query. Pick 2-3 threads from their interests to center this batch on and explore each from different angles; let the rest sit this round.
-- Synthesize interests where you can (e.g. coffee + photography -> "riverside cafe known for the photography prints on its walls").
-- Write FINDABLE queries. Each must target a place that exists as a real business/POI with reviews (a specific cafe, studio, trailhead, market, gallery). Avoid abstractions Maps can't resolve ("urban exploration sites", "ghost tour starting points", "rockhounding spots").
-- Refrain from padding queries with hollow hype ("best hidden", "authentic", "niche").
-
-VIBE is for tone, not obscurity. A "chaotic/quirky" vibe means lively, playful places — not weird-for-weird's-sake.
-
-EXPERIMENTATION LEVEL (${profile.experimentationLevel}/5) — how far to roam from core interests, WITHOUT lowering the quality bar:
-1: Tightly on stated interests.
-2: Interests + safe adjacent picks.
-3: Mostly core, some tasteful adjacent discoveries.
-4: A couple of confident wildcards a friend would insist on — still genuinely good.
-5: Half core, half bold discoveries — bold in kind, never in quality.
-
-GEOGRAPHIC SCALING (Assign 'intendedDifficulty'):
-- easy/moderate: Local to ${profile.city} (e.g. coffee shop, neighborhood park).
-- hard: Neighboring regions/cities (1-3 hrs away).
-- extreme: Remote wilderness or out-of-state road trips.
-
-RULES:
+HOW TO CHOOSE:
+- SPREAD across edges. If the user has several, cover DIFFERENT ones across the ${count} queries — not ${count} variations on a single edge.
+- Pick real, well-regarded places (a specific cafe, studio, class, market, venue, trailhead) — quality over novelty. A great spot where the edge is doable beats an obscure one.
+- Write FINDABLE queries: real businesses/POIs with reviews. Avoid abstractions Maps can't resolve ("urban exploration sites", "ghost tour starting points").
 - Include the city/region name in every query so Maps searches the correct area.
-- Assign 'intendedDifficulty' to match the real geographic scale.
-- You may specify a radius of search within the query, but it is not compulsory.
-${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate location concepts similar to these recently completed quests: ${excludeTitles.join(", ")}` : ""}
+
+HOW FAR TO PUSH — experimentation level ${profile.experimentationLevel}/5 sets how far past the edge to go, and drives 'intendedDifficulty' (the size of the social/personal stretch, NOT geographic distance):
+1 -> easy (right at the edge of comfortable)
+2 -> easy/moderate (a step out)
+3 -> moderate (a real stretch)
+4 -> hard (well beyond)
+5 -> hard/extreme (far beyond — bolder settings and asks)
+Assign each concept an 'intendedDifficulty' from this scale.
+${excludeTitles.length > 0 ? `\nDo NOT generate concepts similar to these recently completed quests: ${excludeTitles.join(", ")}` : ""}
 `;
 }
 
@@ -63,22 +56,27 @@ export function buildQuestWriterPrompt(
   mapsResults: any[],
   userIntent?: string,
 ): string {
-  return `Write the final quests based on the real locations provided.
+  const edges = profile.comfortZoneEdges.join(" | ") || "None";
+
+  return `Write the final quests based on the real locations provided. Each quest must push the user OUT of their comfort zone at that place — a concrete, doable action, never just "visit" or "explore".
 
 USER PROFILE:
 Interests: ${profile.interests.join(",")}
-Growth Areas: ${profile.growthAreas.join(",")}
-${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe quest MUST directly fulfill this request using the location(s) below.\n` : ""}
+Comfort-zone edges (what they avoid / want to face): ${edges}
+Experimentation level: ${profile.experimentationLevel}/5
+${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe quest MUST directly fulfill this request using the location(s) below. Let the request lead; bring in a comfort-zone edge only where it fits naturally.\n` : ""}
 LOCATIONS:
 ${JSON.stringify(mapsResults, null, 2)}
 
 RULES:
 1. Generate exactly ${mapsResults.length} quests.
-2. Calculate final difficulty holistically: factor in both physical distance (miles) AND psychological stretch (growth areas).
-3. 'estimatedActivityMinutes' must reflect the activity time in minutes. Do NOT include travel time in 'estimatedActivityMinutes'.
-4. For each quest, provide the 'assignedLocationId' of the location you are writing the quest for.
-5. Provide the 'recommendedTransportationMode' (must be one of the modes available in that location's transportationOptions).
-6. Write a 'locationDescription': a vivid but VERY short summary of the place itself (what it is and why it's worth visiting), based on its name and address. Maximum 1-2 sentences. Describe the PLACE, not the quest.`;
+2. Each quest must require ACTING on a comfort-zone edge at that place (e.g. edge "Talking to strangers" at a cafe -> "ask the barista to pick your drink for you and ask what got them into coffee"), not passive visiting.${userIntent ? "" : " Spread the set across DIFFERENT edges rather than repeating one."}
+3. 'difficulty' = how far past the edge the quest pushes, set from the experimentation level: 1 -> easy, 2 -> easy/moderate, 3 -> moderate, 4 -> hard, 5 -> hard/extreme.
+4. 'pushesComfortZoneEdges': the edge(s) this quest actually makes the user face — copied VERBATIM from the comfort-zone edges above (exact wording and casing), ordered most-central first, 1 to 3 entries max. Do NOT rephrase, pluralize, or invent an edge the user didn't list. Include only edges the quest genuinely pushes.
+5. 'estimatedActivityMinutes' must reflect the activity time in minutes. Do NOT include travel time.
+6. For each quest, provide the 'assignedLocationId' of the location you are writing the quest for.
+7. Provide the 'recommendedTransportationMode' (must be one of the modes available in that location's transportationOptions).
+8. Write a 'locationDescription': a vivid but VERY short summary of the place itself (what it is and why it's worth visiting), based on its name and address. Maximum 1-2 sentences. Describe the PLACE, not the quest.`;
 }
 
 /**
@@ -113,7 +111,7 @@ export function buildGenericQuestWriterPrompt(
 
 USER PROFILE:
 Interests: ${profile.interests.join(",")}
-Growth Areas: ${profile.growthAreas.join(",")}
+Comfort-zone edges (what they avoid / want to face): ${profile.comfortZoneEdges.join(",")}
 Vibe: ${profile.vibe.join(",")}
 Context: ${profile.additionalContext || "None"}
 ${userIntent ? `\nUSER REQUEST: "${userIntent}"\nThe quest(s) MUST directly fulfill this request.\n` : ""}
@@ -121,7 +119,7 @@ RULES:
 1. Generate exactly ${count} quests.
 2. These quests can involve exploring or traveling, but they MUST be generic (e.g., "find a local cafe", "take a walk in a nearby park") because they will not be tied to a specific Google Maps location. They can also be at-home or online activities.
 3. 'estimatedActivityMinutes' must reflect the activity time in minutes.
-4. Integrate the user's Interests, Growth Areas, and Vibe to make these highly personalized.
+4. Integrate the user's Interests, Vibe, and — where it fits naturally — a comfort-zone edge, to make these highly personalized.
 ${excludeTitles.length > 0 ? `- IMPORTANT: Do NOT generate quests similar to these recently completed quests: ${excludeTitles.join(", ")}` : ""}
 `;
 }

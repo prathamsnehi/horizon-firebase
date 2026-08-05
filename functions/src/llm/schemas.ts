@@ -39,6 +39,10 @@ export const writerQuestsSchema = z.object({
       // A very short (1-2 sentence) summary of the place itself, written by the
       // model — replaces the Atmosphere-tier Google editorial summary.
       locationDescription: z.string(),
+      // The user comfort-zone edge(s) this quest pushes, copied VERBATIM from the
+      // provided list, ordered primary-first, 1-3 entries. The server re-filters
+      // this against the real profile edges, so anything invented is dropped.
+      pushesComfortZoneEdges: z.array(z.string()),
     })
   ),
 });
