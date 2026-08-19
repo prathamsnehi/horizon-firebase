@@ -27,6 +27,8 @@ import {
   commitRateLimitSlot,
   releaseRateLimitSlot,
 } from "../integrations/firestore";
+import { runTrace, span, recordSpan, setTraceField } from "../observability/tracer";
+import { sanitizeProfile, scrubText } from "../observability/sanitize";
 import {
   geminiApiKey,
   placesApiKey,
@@ -95,83 +97,116 @@ export const generateCuratedQuests = functions.https.onCall(
     }
     const uid = request.auth.uid;
 
-    // C: validate structure + content before any spend or slot reservation.
-    const data = request.data as CuratedQuestRequest;
-    if (!data || typeof data !== "object") {
-      throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
-    }
-    const profileErr = validateProfilePayload(data.profile);
-    if (profileErr) throw new functions.https.HttpsError("invalid-argument", profileErr);
-    const excludeErr = validateExcludeTitles(data.excludeTitles);
-    if (excludeErr) throw new functions.https.HttpsError("invalid-argument", excludeErr);
-
-    const { profile, excludeTitles } = data;
-
-    // B: reserve the per-uid 24h curated slot (transactional, server time).
-    const reservation = await reserveRateLimitSlot(uid, "curated");
-    if (!reservation.allowed) {
-      throw new functions.https.HttpsError(
-        "resource-exhausted",
-        "You've used today's curated quest. Come back tomorrow.",
-        { retryAt: reservation.retryAt, scope: "curated" }
-      );
-    }
-
-    try {
-      const hash = hashProfile(profile);
-      const cache = await getPregenCache(uid);
-
-      // A cached batch is usable only if it exists, was built for this exact
-      // profile, and hasn't gone stale. Caching/pre-gen is a cost optimization,
-      // not a rate limit — a miss just means we generate synchronously.
-      let cacheHit = false;
-      if (cache && cache.nextBatch && cache.nextBatch.length > 0) {
-        const builtForThisProfile = cache.nextBatchHash === hash;
-        const age = Date.now() - (cache.nextBatchCreatedAt ?? 0);
-        const fresh = age < BATCH_TTL_MS;
-        cacheHit = builtForThisProfile && fresh;
+    return runTrace({ type: "curated" }, async () => {
+      // C: validate structure + content before any spend or slot reservation.
+      const data = request.data as CuratedQuestRequest;
+      if (!data || typeof data !== "object") {
+        setTraceField({ outcome: "invalid" });
+        throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
+      }
+      const profileErr = validateProfilePayload(data.profile);
+      if (profileErr) {
+        setTraceField({ outcome: "invalid" });
+        throw new functions.https.HttpsError("invalid-argument", profileErr);
+      }
+      const excludeErr = validateExcludeTitles(data.excludeTitles);
+      if (excludeErr) {
+        setTraceField({ outcome: "invalid" });
+        throw new functions.https.HttpsError("invalid-argument", excludeErr);
       }
 
-      let batch: QuestItem[];
-      if (cacheHit) {
-        batch = cache!.nextBatch!;
-      } else {
-        batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
+      const { profile, excludeTitles } = data;
+      recordSpan("request", {
+        meta: { profile: sanitizeProfile(profile), excludeTitles },
+      });
+
+      // B: reserve the per-uid 24h curated slot (transactional, server time).
+      const reservation = await span(
+        "ratelimit.reserve",
+        () => reserveRateLimitSlot(uid, "curated"),
+        {
+          input: { action: "curated" },
+          onResult: (r) => ({ meta: { allowed: r.allowed, retryAt: r.retryAt } }),
+        }
+      );
+      if (!reservation.allowed) {
+        setTraceField({ outcome: "rate_limited" });
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "You've used today's curated quest. Come back tomorrow.",
+          { retryAt: reservation.retryAt, scope: "curated" }
+        );
       }
 
-      // These three are independent and all best-effort — run them together:
-      // invalidate the consumed cache entry (so a failed re-gen can't re-serve
-      // the same batch), queue up the next batch, and flush the stage logs
-      // before the container can freeze.
-      await Promise.all([
-        clearPregenBatch(uid),
-        enqueuePregen({ uid, profile }),
-        flushLogs(),
-      ]);
+      try {
+        const hash = hashProfile(profile);
+        const cache = await getPregenCache(uid);
 
-      console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cacheHit})`);
+        // A cached batch is usable only if it exists, was built for this exact
+        // profile, and hasn't gone stale. Caching/pre-gen is a cost optimization,
+        // not a rate limit — a miss just means we generate synchronously.
+        let cacheHit = false;
+        if (cache && cache.nextBatch && cache.nextBatch.length > 0) {
+          const builtForThisProfile = cache.nextBatchHash === hash;
+          const age = Date.now() - (cache.nextBatchCreatedAt ?? 0);
+          const fresh = age < BATCH_TTL_MS;
+          cacheHit = builtForThisProfile && fresh;
+        }
+        recordSpan("cache.lookup", {
+          // No profileHash/cachedHash: a stable digest of the profile would
+          // re-link every sample from the same user, defeating the anonymity.
+          output: {
+            hit: cacheHit,
+            ageMs: cache?.nextBatchCreatedAt
+              ? Date.now() - cache.nextBatchCreatedAt
+              : null,
+          },
+        });
 
-      // Embed hero-image bytes for the response ONLY, after persisting (so the
-      // stored/cached batch stays reference-only and under Firestore's 1MB cap).
-      // The commit runs in parallel — both are past the point of no return
-      // (quests are landing), and photo attach is best-effort (never throws).
-      // Commit starts the 24h window at delivery and clears the pending stamp;
-      // a timeout before this leaves only the pending stamp (self-expires ≤90s).
-      const [responseBatch] = await Promise.all([
-        attachQuestPhotos(batch),
-        commitRateLimitSlot(uid, "curated"),
-      ]);
-      return { quests: responseBatch };
-    } catch (error) {
-      // Generation failed — free the pending slot immediately (best-effort; a
-      // process death would let it self-expire within 90s instead).
-      await releaseRateLimitSlot(uid, "curated");
-      console.error("[generateCuratedQuests] Fatal error:", error);
-      throw new functions.https.HttpsError(
-        "internal",
-        "An error occurred while generating quests."
-      );
-    }
+        let batch: QuestItem[];
+        if (cacheHit) {
+          batch = cache!.nextBatch!;
+        } else {
+          batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
+        }
+
+        // These three are independent and all best-effort — run them together:
+        // invalidate the consumed cache entry (so a failed re-gen can't re-serve
+        // the same batch), queue up the next batch, and flush the stage logs
+        // before the container can freeze.
+        await Promise.all([
+          clearPregenBatch(uid),
+          enqueuePregen({ uid, profile }),
+          flushLogs(),
+        ]);
+
+        console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cacheHit})`);
+
+        // Record the assembled batch (reference-only, NO base64) as the trace result.
+        setTraceField({ result: { quests: batch } });
+
+        // Embed hero-image bytes for the response ONLY, after persisting (so the
+        // stored/cached batch stays reference-only and under Firestore's 1MB cap).
+        // The commit runs in parallel — both are past the point of no return
+        // (quests are landing), and photo attach is best-effort (never throws).
+        // Commit starts the 24h window at delivery; a timeout before this leaves
+        // only the pending stamp (self-expires in ≤90s — no burned day).
+        const [responseBatch] = await Promise.all([
+          attachQuestPhotos(batch),
+          span("ratelimit.commit", () => commitRateLimitSlot(uid, "curated")),
+        ]);
+        return { quests: responseBatch };
+      } catch (error) {
+        // Generation failed — free the pending slot immediately (best-effort; a
+        // process death would let it self-expire within 90s instead).
+        await releaseRateLimitSlot(uid, "curated");
+        console.error("[generateCuratedQuests] Fatal error:", error);
+        throw new functions.https.HttpsError(
+          "internal",
+          "An error occurred while generating quests."
+        );
+      }
+    });
   }
 );
 
@@ -193,62 +228,86 @@ export const generateUserDescribedQuest = functions.https.onCall(
     }
     const uid = request.auth.uid;
 
-    // C: validate structure + content before any spend or slot reservation.
-    const data = request.data as DescribedQuestRequest;
-    if (!data || typeof data !== "object") {
-      throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
-    }
-    const promptErr = validateDescribePrompt(data.prompt);
-    if (promptErr) throw new functions.https.HttpsError("invalid-argument", promptErr);
-    const profileErr = validateProfilePayload(data.profile);
-    if (profileErr) throw new functions.https.HttpsError("invalid-argument", profileErr);
-
-    const prompt = data.prompt.trim();
-    const { profile } = data;
-
-    // Moderation — before spend and before reserving the slot.
-    if (!isDescribePromptAllowed(prompt)) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "That request can't be turned into a quest."
-      );
-    }
-
-    // B: reserve the per-uid 24h described slot (transactional, server time).
-    const reservation = await reserveRateLimitSlot(uid, "described");
-    if (!reservation.allowed) {
-      throw new functions.https.HttpsError(
-        "resource-exhausted",
-        "You've used today's custom quest. Come back tomorrow.",
-        { retryAt: reservation.retryAt, scope: "described" }
-      );
-    }
-
-    try {
-      const quest = await generateDescribed(prompt, profile);
-      await flushLogs();
-      if (!quest) {
-        throw new Error("Describe generation produced no quest.");
+    return runTrace({ type: "described" }, async () => {
+      // C: validate structure + content before any spend or slot reservation.
+      const data = request.data as DescribedQuestRequest;
+      if (!data || typeof data !== "object") {
+        setTraceField({ outcome: "invalid" });
+        throw new functions.https.HttpsError("invalid-argument", "Invalid request payload.");
       }
-      console.log("[generateUserDescribedQuest] served a described quest");
-      // Embed the hero-image bytes for the response (nothing to persist — a
-      // described quest is one-off and isn't cached). Commit runs in parallel:
-      // the quest is landing and photo attach is best-effort (never throws).
-      // Commit starts the 24h window at delivery.
-      const [[responseQuest]] = await Promise.all([
-        attachQuestPhotos([quest]),
-        commitRateLimitSlot(uid, "described"),
-      ]);
-      return { quest: responseQuest };
-    } catch (error) {
-      // Generation failed — free the pending slot immediately (best-effort; a
-      // process death would let it self-expire within 90s instead).
-      await releaseRateLimitSlot(uid, "described");
-      console.error("[generateUserDescribedQuest] Fatal error:", error);
-      throw new functions.https.HttpsError(
-        "internal",
-        "An error occurred while crafting your quest."
+      const promptErr = validateDescribePrompt(data.prompt);
+      if (promptErr) {
+        setTraceField({ outcome: "invalid" });
+        throw new functions.https.HttpsError("invalid-argument", promptErr);
+      }
+      const profileErr = validateProfilePayload(data.profile);
+      if (profileErr) {
+        setTraceField({ outcome: "invalid" });
+        throw new functions.https.HttpsError("invalid-argument", profileErr);
+      }
+
+      const prompt = data.prompt.trim();
+      const { profile } = data;
+      recordSpan("request", {
+        meta: { profile: sanitizeProfile(profile), prompt: scrubText(prompt) },
+      });
+
+      // Moderation — before spend and before reserving the slot.
+      if (!isDescribePromptAllowed(prompt)) {
+        setTraceField({ outcome: "blocked" });
+        recordSpan("moderation", { output: { allowed: false } });
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "That request can't be turned into a quest."
+        );
+      }
+      recordSpan("moderation", { output: { allowed: true } });
+
+      // B: reserve the per-uid 24h described slot (transactional, server time).
+      const reservation = await span(
+        "ratelimit.reserve",
+        () => reserveRateLimitSlot(uid, "described"),
+        {
+          input: { action: "described" },
+          onResult: (r) => ({ meta: { allowed: r.allowed, retryAt: r.retryAt } }),
+        }
       );
-    }
+      if (!reservation.allowed) {
+        setTraceField({ outcome: "rate_limited" });
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "You've used today's custom quest. Come back tomorrow.",
+          { retryAt: reservation.retryAt, scope: "described" }
+        );
+      }
+
+      try {
+        const quest = await generateDescribed(prompt, profile);
+        await flushLogs();
+        if (!quest) {
+          throw new Error("Describe generation produced no quest.");
+        }
+        console.log("[generateUserDescribedQuest] served a described quest");
+        setTraceField({ result: { quest } });
+        // Embed the hero-image bytes for the response (nothing to persist — a
+        // described quest is one-off and isn't cached). Commit runs in parallel:
+        // the quest is landing and photo attach is best-effort (never throws).
+        // Commit starts the 24h window at delivery.
+        const [[responseQuest]] = await Promise.all([
+          attachQuestPhotos([quest]),
+          span("ratelimit.commit", () => commitRateLimitSlot(uid, "described")),
+        ]);
+        return { quest: responseQuest };
+      } catch (error) {
+        // Generation failed — free the pending slot immediately (best-effort; a
+        // process death would let it self-expire within 90s instead).
+        await releaseRateLimitSlot(uid, "described");
+        console.error("[generateUserDescribedQuest] Fatal error:", error);
+        throw new functions.https.HttpsError(
+          "internal",
+          "An error occurred while crafting your quest."
+        );
+      }
+    });
   }
 );

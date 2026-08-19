@@ -1,4 +1,4 @@
-import { defineSecret } from "firebase-functions/params";
+import { defineSecret, defineList } from "firebase-functions/params";
 
 // --------
 // Secrets:
@@ -12,6 +12,24 @@ export const placesApiKey = defineSecret("PLACES_API_KEY");
 export const groqApiKey = defineSecret("GROQ_API_KEY");
 export const mistralApiKey = defineSecret("MISTRAL_API_KEY");
 export const cerebrasApiKey = defineSecret("CEREBRAS_API_KEY");
+
+// ------------------
+// Environment config:
+// ------------------
+
+/**
+ * Uids exempt from the per-user 24h generation limit — developer accounts that
+ * need to generate freely while testing. Set in `functions/.env` (see
+ * `.env.example`); **empty by default**, so an environment that configures
+ * nothing gates every user normally.
+ *
+ * Safe to leave configured: `request.auth.uid` comes from a signed Firebase
+ * Auth token, so only the account owner can present it, and total spend stays
+ * bounded by the Maps daily quotas and the per-provider LLM rate windows.
+ */
+export const rateLimitExemptUids = defineList("RATE_LIMIT_EXEMPT_UIDS", {
+  default: [],
+});
 
 // ----------
 // Constants:

@@ -15,7 +15,7 @@ import {
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
 import { evaluateReservation } from "../utils/rateLimit";
-import { BATCH_TTL_MS } from "../config";
+import { BATCH_TTL_MS, rateLimitExemptUids } from "../config";
 
 /**
  * Initialize the Admin SDK once at module load (runs at cold start, before any
@@ -72,6 +72,34 @@ export async function flushLogs(): Promise<void> {
 }
 
 // ------------------------------
+// End-to-end generation samples (generation_samples)
+// ------------------------------
+// One anonymous record per generation: pipeline waterfall, inputs, outputs,
+// and outcome. Doubles as the error log and the training corpus. Carries no
+// uid and nothing that could re-link samples to a person, so it runs in every
+// environment and is retained indefinitely (no TTL, unlike pregen_cache).
+// ------------------------------
+
+const GENERATION_SAMPLES_COLLECTION = "generation_samples";
+
+/**
+ * Persist one end-to-end trace document (built by the tracer). Awaited by the
+ * tracer at request end, so it's a single write that lands before the container
+ * can freeze. Never throws — a tracing failure must not affect the request.
+ * Takes a plain object to avoid a type cycle with the tracer module.
+ */
+export async function saveGenerationSample(doc: Record<string, unknown>): Promise<void> {
+  try {
+    // A JSON round-trip strips `undefined` (which Firestore rejects) and any
+    // non-plain values from the arbitrary captured input/output objects.
+    const safe = JSON.parse(JSON.stringify(doc));
+    await getDb().collection(GENERATION_SAMPLES_COLLECTION).add(safe);
+  } catch (err) {
+    console.error("[saveGenerationSample] Failed to persist sample:", err);
+  }
+}
+
+// ------------------------------
 // Global rate distribution (llm_rate_buckets/global)
 // ------------------------------
 
@@ -91,7 +119,7 @@ const RATE_BUCKET_DOC = "llm_rate_buckets/global";
  */
 export async function reserveLlmToken(
   candidateKeys: string[],
-  limits: Record<string, RateWindowConfig[]>,
+  limits: Record<string, RateWindowConfig[]>
 ): Promise<string[]> {
   try {
     const ref = getDb().doc(RATE_BUCKET_DOC);
@@ -129,7 +157,7 @@ export async function reserveLlmToken(
       if (eligible.length) {
         chosen = eligible.reduce(
           (best, key) => (headroom[key] > headroom[best] ? key : best),
-          eligible[0],
+          eligible[0]
         );
         const windows = limits[chosen] ?? [];
         const state = data[chosen];
@@ -197,7 +225,7 @@ const PREGEN_CACHE_COLLECTION = "pregen_cache";
 
 /** Read a user's cached pre-generated batch (if any). */
 export async function getPregenCache(
-  uid: string,
+  uid: string
 ): Promise<PregenCacheDocument | null> {
   const snap = await getDb()
     .collection(PREGEN_CACHE_COLLECTION)
@@ -211,7 +239,7 @@ export async function savePregeneratedBatch(
   uid: string,
   batch: QuestItem[],
   profileHash: string,
-  createdAt: number = Date.now(),
+  createdAt: number = Date.now()
 ): Promise<void> {
   await getDb()
     .collection(PREGEN_CACHE_COLLECTION)
@@ -224,7 +252,7 @@ export async function savePregeneratedBatch(
         nextBatchCreatedAt: createdAt,
         expireAt: Timestamp.fromMillis(createdAt + BATCH_TTL_MS), // for the sake of native firestore TTL
       },
-      { merge: true },
+      { merge: true }
     );
 }
 
@@ -233,15 +261,18 @@ export async function savePregeneratedBatch(
  * re-generation can't serve the same batch twice.
  */
 export async function clearPregenBatch(uid: string): Promise<void> {
-  await getDb().collection(PREGEN_CACHE_COLLECTION).doc(uid).set(
-    {
-      uid,
-      nextBatch: null,
-      nextBatchHash: null,
-      nextBatchCreatedAt: null,
-    },
-    { merge: true },
-  );
+  await getDb()
+    .collection(PREGEN_CACHE_COLLECTION)
+    .doc(uid)
+    .set(
+      {
+        uid,
+        nextBatch: null,
+        nextBatchHash: null,
+        nextBatchCreatedAt: null,
+      },
+      { merge: true }
+    );
 }
 
 // ------------------------------
@@ -249,6 +280,23 @@ export async function clearPregenBatch(uid: string): Promise<void> {
 // ------------------------------
 
 const RATE_LIMITS_COLLECTION = "user_rate_limits";
+
+/**
+ * Whether a uid is exempt from the 24h limit (developer accounts — see
+ * `rateLimitExemptUids` in config.ts). The list lives in `functions/.env`, never
+ * in source, and is empty by default.
+ *
+ * Params are only readable while a function is executing, so this is resolved
+ * per call rather than at module load, and **fails closed**: if the value can't
+ * be read, nobody is exempt.
+ */
+function isRateLimitExempt(uid: string): boolean {
+  try {
+    return rateLimitExemptUids.value().includes(uid);
+  } catch {
+    return false;
+  }
+}
 
 export type RateAction = "curated" | "described";
 
@@ -277,8 +325,13 @@ export interface RateReservation {
  */
 export async function reserveRateLimitSlot(
   uid: string,
-  action: RateAction,
+  action: RateAction
 ): Promise<RateReservation> {
+  // Always allow, and write no pending stamp, so an exempt uid is never gated.
+  // Note this also skips the concurrent-duplicate guard, which is intentional
+  // for a dev account generating repeatedly.
+  if (isRateLimitExempt(uid)) return { allowed: true };
+
   const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
   const lastField = lastFieldFor(action);
   const pendingField = pendingFieldFor(action);
@@ -292,19 +345,12 @@ export async function reserveRateLimitSlot(
     const result = evaluateReservation(
       lastTs ? lastTs.toMillis() : null,
       pendingTs ? pendingTs.toMillis() : null,
-      nowMs,
+      nowMs
     );
     if (!result.allowed) {
-      return {
-        allowed: false,
-        retryAt: new Date(result.retryAtMs!).toISOString(),
-      };
+      return { allowed: false, retryAt: new Date(result.retryAtMs!).toISOString() };
     }
-    tx.set(
-      ref,
-      { [pendingField]: Timestamp.fromMillis(nowMs) },
-      { merge: true },
-    );
+    tx.set(ref, { [pendingField]: Timestamp.fromMillis(nowMs) }, { merge: true });
     return { allowed: true };
   });
 }
@@ -316,8 +362,11 @@ export async function reserveRateLimitSlot(
  */
 export async function commitRateLimitSlot(
   uid: string,
-  action: RateAction,
+  action: RateAction
 ): Promise<void> {
+  // No durable stamp for an exempt uid, so its 24h window never opens.
+  if (isRateLimitExempt(uid)) return;
+
   await getDb()
     .collection(RATE_LIMITS_COLLECTION)
     .doc(uid)
@@ -326,7 +375,7 @@ export async function commitRateLimitSlot(
         [lastFieldFor(action)]: Timestamp.now(),
         [pendingFieldFor(action)]: FieldValue.delete(),
       },
-      { merge: true },
+      { merge: true }
     );
 }
 
@@ -337,8 +386,11 @@ export async function commitRateLimitSlot(
  */
 export async function releaseRateLimitSlot(
   uid: string,
-  action: RateAction,
+  action: RateAction
 ): Promise<void> {
+  // An exempt uid never wrote a pending stamp, so there's nothing to release.
+  if (isRateLimitExempt(uid)) return;
+
   try {
     await getDb()
       .collection(RATE_LIMITS_COLLECTION)

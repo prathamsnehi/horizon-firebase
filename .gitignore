@@ -31,6 +31,10 @@ yarn-error.log*
 .secret.*
 *.local
 
+# ...but the documented template IS committed.
+!.env.example
+!*/.env.example
+
 # AI-Gen Files:
 .claude
 
