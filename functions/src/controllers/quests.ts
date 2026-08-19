@@ -28,6 +28,7 @@ import {
   releaseRateLimitSlot,
 } from "../integrations/firestore";
 import { runTrace, span, recordSpan, setTraceField } from "../observability/tracer";
+import { sanitizeProfile, scrubText } from "../observability/sanitize";
 import {
   geminiApiKey,
   placesApiKey,
@@ -96,7 +97,7 @@ export const generateCuratedQuests = functions.https.onCall(
     }
     const uid = request.auth.uid;
 
-    return runTrace({ type: "curated", uid }, async () => {
+    return runTrace({ type: "curated" }, async () => {
       // C: validate structure + content before any spend or slot reservation.
       const data = request.data as CuratedQuestRequest;
       if (!data || typeof data !== "object") {
@@ -115,7 +116,9 @@ export const generateCuratedQuests = functions.https.onCall(
       }
 
       const { profile, excludeTitles } = data;
-      recordSpan("request", { meta: { profile, excludeTitles } });
+      recordSpan("request", {
+        meta: { profile: sanitizeProfile(profile), excludeTitles },
+      });
 
       // B: reserve the per-uid 24h curated slot (transactional, server time).
       const reservation = await span(
@@ -150,10 +153,10 @@ export const generateCuratedQuests = functions.https.onCall(
           cacheHit = builtForThisProfile && fresh;
         }
         recordSpan("cache.lookup", {
+          // No profileHash/cachedHash: a stable digest of the profile would
+          // re-link every sample from the same user, defeating the anonymity.
           output: {
             hit: cacheHit,
-            profileHash: hash,
-            cachedHash: cache?.nextBatchHash ?? null,
             ageMs: cache?.nextBatchCreatedAt
               ? Date.now() - cache.nextBatchCreatedAt
               : null,
@@ -225,7 +228,7 @@ export const generateUserDescribedQuest = functions.https.onCall(
     }
     const uid = request.auth.uid;
 
-    return runTrace({ type: "described", uid }, async () => {
+    return runTrace({ type: "described" }, async () => {
       // C: validate structure + content before any spend or slot reservation.
       const data = request.data as DescribedQuestRequest;
       if (!data || typeof data !== "object") {
@@ -245,7 +248,9 @@ export const generateUserDescribedQuest = functions.https.onCall(
 
       const prompt = data.prompt.trim();
       const { profile } = data;
-      recordSpan("request", { meta: { profile, prompt } });
+      recordSpan("request", {
+        meta: { profile: sanitizeProfile(profile), prompt: scrubText(prompt) },
+      });
 
       // Moderation — before spend and before reserving the slot.
       if (!isDescribePromptAllowed(prompt)) {

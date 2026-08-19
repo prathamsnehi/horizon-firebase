@@ -1,6 +1,6 @@
 // Mock the Firestore write so the tracer never touches the network / Admin SDK.
 jest.mock("../../integrations/firestore", () => ({
-  saveTrace: jest.fn().mockResolvedValue(undefined),
+  saveGenerationSample: jest.fn().mockResolvedValue(undefined),
 }));
 
 import {
@@ -10,23 +10,23 @@ import {
   currentTrace,
   setTraceField,
 } from "../../observability/tracer";
-import { saveTrace } from "../../integrations/firestore";
+import { saveGenerationSample } from "../../integrations/firestore";
 
-const mockSaveTrace = saveTrace as jest.Mock;
+const mockSaveSample = saveGenerationSample as jest.Mock;
 
 describe("tracer", () => {
-  beforeEach(() => mockSaveTrace.mockClear());
+  beforeEach(() => mockSaveSample.mockClear());
 
   it("no-ops recordSpan/span with no active trace and never writes", async () => {
     expect(currentTrace()).toBeUndefined();
     expect(() => recordSpan("x", { latencyMs: 5 })).not.toThrow();
     const v = await span("y", async () => 42);
     expect(v).toBe(42);
-    expect(mockSaveTrace).not.toHaveBeenCalled();
+    expect(mockSaveSample).not.toHaveBeenCalled();
   });
 
   it("records ordered spans and writes exactly one doc, returning the value", async () => {
-    const ret = await runTrace({ type: "curated", uid: "u1" }, async () => {
+    const ret = await runTrace({ type: "curated" }, async () => {
       recordSpan("a", { latencyMs: 1 });
       await span("b", async () => "r", {
         input: { x: 1 },
@@ -37,11 +37,12 @@ describe("tracer", () => {
     });
 
     expect(ret).toBe("value");
-    expect(mockSaveTrace).toHaveBeenCalledTimes(1);
+    expect(mockSaveSample).toHaveBeenCalledTimes(1);
 
-    const doc = mockSaveTrace.mock.calls[0][0];
+    const doc = mockSaveSample.mock.calls[0][0];
     expect(doc.type).toBe("curated");
-    expect(doc.uid).toBe("u1");
+    // the record is anonymous by construction
+    expect(doc.uid).toBeUndefined();
     expect(doc.outcome).toBe("success");
     expect(doc.result).toEqual({ ok: true });
     expect(doc.spans.map((s: any) => s.stage)).toEqual(["a", "b"]);
@@ -55,21 +56,21 @@ describe("tracer", () => {
 
   it("stamps outcome:error and rethrows, still writing one doc", async () => {
     await expect(
-      runTrace({ type: "pregen", uid: "d" }, async () => {
+      runTrace({ type: "pregen" }, async () => {
         recordSpan("a", {});
         throw new Error("boom");
       })
     ).rejects.toThrow("boom");
 
-    expect(mockSaveTrace).toHaveBeenCalledTimes(1);
-    const doc = mockSaveTrace.mock.calls[0][0];
+    expect(mockSaveSample).toHaveBeenCalledTimes(1);
+    const doc = mockSaveSample.mock.calls[0][0];
     expect(doc.outcome).toBe("error");
     expect(doc.error).toContain("boom");
   });
 
   it("isolates concurrent traces via AsyncLocalStorage", async () => {
     const run = (id: string) =>
-      runTrace({ type: "curated", uid: id }, async () => {
+      runTrace({ type: "curated" }, async () => {
         recordSpan("s1", { meta: { id } });
         await new Promise((r) => setTimeout(r, 5));
         recordSpan("s2", { meta: { id } });
@@ -78,12 +79,22 @@ describe("tracer", () => {
 
     await Promise.all([run("A"), run("B")]);
 
-    const docs = mockSaveTrace.mock.calls.map((c) => c[0]);
+    const docs = mockSaveSample.mock.calls.map((c) => c[0]);
     expect(docs).toHaveLength(2);
     for (const doc of docs) {
       const ids = new Set(doc.spans.map((s: any) => s.meta.id));
       // every span in a trace belongs to that one request — no cross-talk
       expect(ids.size).toBe(1);
     }
+  });
+
+  it("writes no sample at all when the outcome is blocked", async () => {
+    await runTrace({ type: "described" }, async () => {
+      recordSpan("request", { meta: { prompt: "x" } });
+      setTraceField({ outcome: "blocked" });
+    });
+
+    // moderated text must never reach the corpus, not even as a bare record
+    expect(mockSaveSample).not.toHaveBeenCalled();
   });
 });

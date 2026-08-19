@@ -1,5 +1,5 @@
 /**
- * Request-scoped end-to-end tracing (TEST BRANCH ONLY).
+ * Request-scoped end-to-end tracing.
  *
  * Captures one self-contained trace document per request — an ordered list of
  * pipeline spans (Scout → Maps → Writer → generic, plus rate-limit/cache/photo
@@ -12,11 +12,12 @@
  * multiple requests per instance) and a **no-op when no context is active** — so
  * un-wrapped paths and unit tests record nothing and never crash.
  *
- * This module exists only on the `test` branch; `main` never imports it.
+ * The record is ANONYMOUS: no uid, and no field that could re-link two samples
+ * to the same person. See {@link ../observability/sanitize} for what survives.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { saveTrace } from "../integrations/firestore";
+import { saveGenerationSample } from "../integrations/firestore";
 
 export type TraceType = "curated" | "described" | "pregen";
 export type TraceOutcome =
@@ -39,7 +40,6 @@ export interface TraceSpan {
 export interface TraceContext {
   traceId: string;
   type: TraceType;
-  uid?: string;
   startMs: number;
   spans: TraceSpan[];
   outcome?: TraceOutcome;
@@ -50,7 +50,6 @@ export interface TraceContext {
 
 export interface TraceInit {
   type: TraceType;
-  uid?: string;
 }
 
 const als = new AsyncLocalStorage<TraceContext>();
@@ -138,7 +137,8 @@ export async function span<T>(
 }
 
 /**
- * Open a trace context, run `fn` inside it, and write exactly one `debug_logs`
+ * Open a trace context, run `fn` inside it, and write exactly one
+ * `generation_samples`
  * document when it settles. Stamps `outcome`/`totalLatencyMs`; on a thrown error
  * it records `outcome:"error"` (unless the handler already set a more specific
  * one) and rethrows — the trace write never masks the handler's result or error.
@@ -150,7 +150,6 @@ export async function runTrace<T>(
   const ctx: TraceContext = {
     traceId: randomUUID(),
     type: init.type,
-    uid: init.uid,
     startMs: Date.now(),
     spans: [],
     _seq: 0,
@@ -165,20 +164,24 @@ export async function runTrace<T>(
     if (!ctx.error) ctx.error = String((err as Error)?.message ?? err);
     throw err;
   } finally {
-    await saveTrace(toTraceDoc(ctx));
+    // A blocked prompt is retained nowhere. The sample would exist only to
+    // record that someone wrote moderated text — the one thing this corpus
+    // must never accumulate.
+    if (ctx.outcome !== "blocked") {
+      await saveGenerationSample(toTraceDoc(ctx));
+    }
   }
 }
 
 /**
  * Serialize a trace context to the document written to Firestore. `undefined`
- * fields (which Firestore rejects) are dropped downstream by {@link saveTrace}'s
+ * fields (which Firestore rejects) are dropped downstream by {@link saveGenerationSample}'s
  * JSON round-trip, so we can build this object directly.
  */
 function toTraceDoc(ctx: TraceContext): Record<string, unknown> {
   return {
     traceId: ctx.traceId,
     type: ctx.type,
-    uid: ctx.uid,
     startedAt: ctx.startMs,
     totalLatencyMs: Date.now() - ctx.startMs,
     outcome: ctx.outcome ?? "success",
