@@ -15,7 +15,7 @@ import {
 } from "../types";
 import { advanceWindow, consumeWindow } from "../llm/rateMath";
 import { evaluateReservation } from "../utils/rateLimit";
-import { BATCH_TTL_MS } from "../config";
+import { BATCH_TTL_MS, rateLimitExemptUids } from "../config";
 
 /**
  * Initialize the Admin SDK once at module load (runs at cold start, before any
@@ -281,15 +281,22 @@ export async function clearPregenBatch(uid: string): Promise<void> {
 
 const RATE_LIMITS_COLLECTION = "user_rate_limits";
 
-// ⚠️⚠️⚠️ TEST-BRANCH ONLY — DO NOT PORT TO `main`. ⚠️⚠️⚠️
-// Personal dev uid(s) exempted from rate limiting so I can generate freely while
-// testing on the `test` deployment. This bypass MUST NEVER ship to production —
-// it hands unlimited LLM/Maps spend to anyone holding this uid. If you're syncing
-// changes to `main`, drop this constant and every `RATE_LIMIT_EXEMPT_UIDS` guard
-// below.
-const RATE_LIMIT_EXEMPT_UIDS = new Set<string>([
-  "wjydGLbytkdSoo76h3nI9i19N4z1", // me
-]);
+/**
+ * Whether a uid is exempt from the 24h limit (developer accounts — see
+ * `rateLimitExemptUids` in config.ts). The list lives in `functions/.env`, never
+ * in source, and is empty by default.
+ *
+ * Params are only readable while a function is executing, so this is resolved
+ * per call rather than at module load, and **fails closed**: if the value can't
+ * be read, nobody is exempt.
+ */
+function isRateLimitExempt(uid: string): boolean {
+  try {
+    return rateLimitExemptUids.value().includes(uid);
+  } catch {
+    return false;
+  }
+}
 
 export type RateAction = "curated" | "described";
 
@@ -320,9 +327,10 @@ export async function reserveRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<RateReservation> {
-  // TEST-BRANCH ONLY — see RATE_LIMIT_EXEMPT_UIDS note above. Never port to main.
-  // Always allow, and write no pending stamp, so the exempt uid is never gated.
-  if (RATE_LIMIT_EXEMPT_UIDS.has(uid)) return { allowed: true };
+  // Always allow, and write no pending stamp, so an exempt uid is never gated.
+  // Note this also skips the concurrent-duplicate guard, which is intentional
+  // for a dev account generating repeatedly.
+  if (isRateLimitExempt(uid)) return { allowed: true };
 
   const ref = getDb().collection(RATE_LIMITS_COLLECTION).doc(uid);
   const lastField = lastFieldFor(action);
@@ -356,9 +364,8 @@ export async function commitRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<void> {
-  // TEST-BRANCH ONLY — see RATE_LIMIT_EXEMPT_UIDS note above. Never port to main.
-  // No durable stamp for the exempt uid, so its 24h window never opens.
-  if (RATE_LIMIT_EXEMPT_UIDS.has(uid)) return;
+  // No durable stamp for an exempt uid, so its 24h window never opens.
+  if (isRateLimitExempt(uid)) return;
 
   await getDb()
     .collection(RATE_LIMITS_COLLECTION)
@@ -381,9 +388,8 @@ export async function releaseRateLimitSlot(
   uid: string,
   action: RateAction
 ): Promise<void> {
-  // TEST-BRANCH ONLY — see RATE_LIMIT_EXEMPT_UIDS note above. Never port to main.
-  // The exempt uid never wrote a pending stamp, so there's nothing to release.
-  if (RATE_LIMIT_EXEMPT_UIDS.has(uid)) return;
+  // An exempt uid never wrote a pending stamp, so there's nothing to release.
+  if (isRateLimitExempt(uid)) return;
 
   try {
     await getDb()
