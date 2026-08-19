@@ -1,4 +1,4 @@
-import { defineSecret, defineString } from "firebase-functions/params";
+import { defineSecret } from "firebase-functions/params";
 
 // --------
 // Secrets:
@@ -13,28 +13,23 @@ export const groqApiKey = defineSecret("GROQ_API_KEY");
 export const mistralApiKey = defineSecret("MISTRAL_API_KEY");
 export const cerebrasApiKey = defineSecret("CEREBRAS_API_KEY");
 
-// ------------------
-// Environment config:
-// ------------------
-
 /**
- * Uids exempt from the per-user 24h generation limit — developer accounts that
- * need to generate freely while testing. Set in `functions/.env` (see
- * `.env.example`); **empty by default**, so an environment that configures
+ * Comma-separated uids exempt from the per-user 24h generation limit —
+ * developer accounts that need to generate freely while testing.
+ *
+ * Stored in Secret Manager rather than a file, so the value survives every
+ * deploy regardless of who triggers it (a `.env` is gitignored and therefore
+ * invisible to CI, which would silently reset the list on each pipeline run).
+ * See docs/developer/secrets-and-config.md for how to set it.
+ *
+ * Unset resolves to "" — nobody exempt — so an environment that configures
  * nothing gates every user normally.
  *
  * Safe to leave configured: `request.auth.uid` comes from a signed Firebase
  * Auth token, so only the account owner can present it, and total spend stays
  * bounded by the Maps daily quotas and the per-provider LLM rate windows.
- *
- * Deliberately a string split on commas rather than `defineList`: a list param
- * resolves via `JSON.parse(process.env[name])`, so it needs a JSON array in
- * `.env` and throws when unset. A string reads `process.env[name] || ""`, which
- * keeps the file format plain and the unset case boring.
  */
-export const rateLimitExemptUids = defineString("RATE_LIMIT_EXEMPT_UIDS", {
-  default: "",
-});
+export const rateLimitExemptUids = defineSecret("RATE_LIMIT_EXEMPT_UIDS");
 
 // ----------
 // Constants:

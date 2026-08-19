@@ -283,10 +283,10 @@ const RATE_LIMITS_COLLECTION = "user_rate_limits";
 
 /**
  * Whether a uid is exempt from the 24h limit (developer accounts — see
- * `rateLimitExemptUids` in config.ts). The list lives in `functions/.env`, never
- * in source, and is empty by default.
+ * `rateLimitExemptUids` in config.ts and docs/developer/secrets-and-config.md).
+ * The list lives in Secret Manager, never in source, and is empty when unset.
  *
- * Params are only readable while a function is executing, so this is resolved
+ * Secrets are only readable while a function is executing, so this is resolved
  * per call rather than at module load, and **fails closed**: if the value can't
  * be read, nobody is exempt.
  */
