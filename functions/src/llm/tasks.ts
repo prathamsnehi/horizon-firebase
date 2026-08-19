@@ -19,6 +19,8 @@ import {
   describePlanSchema,
 } from "./schemas";
 import { saveLog } from "../integrations/firestore";
+import { recordSpan } from "../observability/tracer";
+import { scrubText } from "../observability/sanitize";
 import { RoutingResult } from "./types";
 
 /**
@@ -42,6 +44,20 @@ function logCall(
   });
 }
 
+/** Routing provider/model/attempts + failover chain, as trace-span meta. */
+function routingMeta(
+  result: RoutingResult<unknown>,
+  extra?: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    provider: result.providerUsed,
+    model: result.modelUsed,
+    attempts: result.attempts,
+    attemptLog: result.attemptLog,
+    ...extra,
+  };
+}
+
 /**
  * Pass 1 (Scout): generate abstract Google Maps search queries.
  */
@@ -56,7 +72,14 @@ export async function generateLocationConcepts(
     prompt,
   });
   logCall("scout", result);
-  return result.object.locationConcepts ?? [];
+  const locationConcepts = result.object.locationConcepts ?? [];
+  recordSpan("scout", {
+    latencyMs: result.latencyMs,
+    input: { count, excludeTitles },
+    output: { locationConcepts },
+    meta: routingMeta(result),
+  });
+  return locationConcepts;
 }
 
 /**
@@ -82,6 +105,12 @@ export async function generateQuestsWriter(
   });
   logCall("writer", result);
   const rawQuests = result.object.quests ?? [];
+  recordSpan("writer", {
+    latencyMs: result.latencyMs,
+    input: { locations: locationsWithIds, userIntent: scrubText(userIntent) },
+    output: { quests: rawQuests },
+    meta: routingMeta(result),
+  });
 
   // Verbatim guarantee: the client renders these back to the user, so an entry
   // must be an EXACT string the user submitted. Drop anything the model
@@ -137,6 +166,7 @@ export async function generateGenericQuests(
   count: number,
   excludeTitles: string[] = [],
   userIntent?: string,
+  reason?: string,
 ): Promise<QuestItem[]> {
   if (count <= 0) return [];
 
@@ -153,6 +183,12 @@ export async function generateGenericQuests(
   });
   logCall("generic", result);
   const rawQuests = result.object.quests ?? [];
+  recordSpan("generic", {
+    latencyMs: result.latencyMs,
+    input: { count, excludeTitles, userIntent: scrubText(userIntent) },
+    output: { quests: rawQuests },
+    meta: routingMeta(result, reason ? { reason } : undefined),
+  });
 
   return rawQuests.map((sq) => ({
     title: sq.title,
@@ -178,5 +214,11 @@ export async function planDescribedQuest(
     prompt: plannerPrompt,
   });
   logCall("planner", result);
+  recordSpan("planner", {
+    latencyMs: result.latencyMs,
+    input: { userPrompt: scrubText(prompt) },
+    output: { plan: result.object },
+    meta: routingMeta(result),
+  });
   return result.object;
 }
