@@ -26,7 +26,7 @@
     "delete-user-data": "firebase/delete-user-data@0.1.29"
   },
   "hosting": {
-    "public": "hosting",
+    "public": "hosting/dist",
     "ignore": [
       "firebase.json",
       "**/.*",

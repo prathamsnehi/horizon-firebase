@@ -1,5 +1,8 @@
 # Agent context
 
+> **In flight:** unfinished setup work is tracked in
+> [../HANDOFF.md](../HANDOFF.md) — read it before starting anything.
+
 Read this first. It is the orientation an agent needs before touching this repo;
 the human-facing docs live in [../developer/](../developer/) and are deliberately
 thinner.
@@ -11,16 +14,17 @@ pushing a user just past their comfort zone. The backend's whole job is: take a
 user profile, produce 3 curated quests (or 1 from a freeform prompt), each tied to
 a real place with a photo.
 
-**The client is not in this repo.** It is a separate iOS/SwiftData app. There is
-no web frontend — the React app that used to live in `frontend/` was deleted, and
-`hosting/` now serves a static coming-soon page.
+**The product client is not in this repo.** It is a separate iOS/SwiftData app.
+The React app that used to live in `frontend/` was deleted. `hosting/` is a small
+internal site — the public coming-soon page, plus an admin dashboard over the
+observability samples. It is not the product.
 
 ## Where things are
 
 | Path | What |
 |---|---|
 | `functions/` | The entire backend. This is the work. |
-| `hosting/` | One static HTML page. Not an app. |
+| `hosting/` | Vite React app: coming-soon at `/`, admin dashboard at `/admin` |
 | `firestore/` | Rules (deny-all) + indexes |
 | `extensions/` | Delete-user-data extension config |
 | `docs/api/` | The wire contract — source of truth for request/response shapes |

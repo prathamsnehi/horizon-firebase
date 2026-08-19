@@ -5,10 +5,15 @@ What's actually left before going public. Everything not listed here is done.
 ## Already handled
 
 Server-side rate limiting (per-uid, 24h, crash-safe), App Check on both
-callables, deny-all Firestore rules, keys in Secret Manager, the Maps key never
-reaching a client, input size caps, provider failover, Maps quota caps, billing
-alerts, and account-deletion cleanup. Details in
+callables, keys in Secret Manager, the Maps key never reaching a client, input
+size caps, provider failover, Maps quota caps, billing alerts, and
+account-deletion cleanup. Details in
 [../agent/architecture.md](../agent/architecture.md).
+
+Firestore rules are closed to clients everywhere **except** a read-only path to
+`generation_samples` for allowlisted admins, which is what the `/admin`
+dashboard uses. Those records are anonymous, and every other collection stays
+server-only.
 
 ## Left to do
 

@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Palette. Every data color below is VALIDATED, not chosen by eye —
+ * scripts/validate_palette.js from the dataviz skill, run against this file's
+ * own --surface (#1a1a19) in dark mode:
+ *
+ *   categorical (8 slots) ... all checks PASS
+ *                             worst adjacent CVD ΔE 8.4, normal-vision 19.3
+ *   status (4 roles) ........ separation + contrast PASS
+ *                             (the lightness-band check is a categorical
+ *                              criterion the fixed status palette sits outside
+ *                              by design; every status use pairs with a label)
+ *   ordinal blue (2 steps) .. all checks PASS
+ *
+ * The status ORDER is load-bearing: success → rate_limited → error → invalid
+ * was picked because it was the only ordering of the four whose adjacent pairs
+ * clear both the CVD and normal-vision floors. Reordering them re-fails it.
+ */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --page: 13 13 13;
+    --surface: 26 26 25; /* cards + chart surface — the validator's reference */
+    --raised: 35 35 34; /* nested surfaces, table hover */
+    --grid: 44 44 42; /* gridline hairline */
+    --axis: 56 56 53; /* baseline / axis */
+    --line: 44 44 42; /* UI hairlines */
+
+    /* Ink — text NEVER wears a series color */
+    --fg: 255 255 255;
+    --dim: 195 194 183;
+    --muted: 137 135 129;
+
+    /* Brand accent: UI chrome only (focus, selection). Never encodes data. */
+    --accent: 255 182 147;
+
+    /* Categorical series, in fixed slot order. Assigned by identity, never
+       cycled, never reordered by rank. */
+    --s1: 57 135 229;
+    --s2: 217 89 38;
+    --s3: 25 158 112;
+    --s4: 201 133 0;
+    --s5: 213 81 129;
+    --s6: 0 131 0;
+    --s7: 144 133 233;
+    --s8: 230 103 103;
+
+    /* Status — reserved for state, never reused as "series 5" */
+    --good: 12 163 12;
+    --warning: 250 178 25;
+    --critical: 208 59 59;
+    --serious: 236 131 90;
+
+    /* Ordinal ramp, one hue, for the two quantiles of one measure */
+    --q50: 134 182 239;
+    --q95: 57 135 229;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-page text-fg font-sans antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-surface;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line
+           px-2 py-0.5 text-micro font-medium;
+  }
+
+  .ring-focus {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/70
+           focus-visible:ring-offset-2 focus-visible:ring-offset-page;
+  }
+
+  /* Columns that must align vertically. Standalone stat values keep the
+     default proportional figures. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Carried over verbatim from the static coming-soon page. */
+  .coming-soon {
+    animation: breathe 4s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .coming-soon {
+      animation: none;
+    }
+  }
+}
