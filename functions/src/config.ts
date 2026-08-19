@@ -1,4 +1,4 @@
-import { defineSecret, defineList } from "firebase-functions/params";
+import { defineSecret, defineString } from "firebase-functions/params";
 
 // --------
 // Secrets:
@@ -26,9 +26,14 @@ export const cerebrasApiKey = defineSecret("CEREBRAS_API_KEY");
  * Safe to leave configured: `request.auth.uid` comes from a signed Firebase
  * Auth token, so only the account owner can present it, and total spend stays
  * bounded by the Maps daily quotas and the per-provider LLM rate windows.
+ *
+ * Deliberately a string split on commas rather than `defineList`: a list param
+ * resolves via `JSON.parse(process.env[name])`, so it needs a JSON array in
+ * `.env` and throws when unset. A string reads `process.env[name] || ""`, which
+ * keeps the file format plain and the unset case boring.
  */
-export const rateLimitExemptUids = defineList("RATE_LIMIT_EXEMPT_UIDS", {
-  default: [],
+export const rateLimitExemptUids = defineString("RATE_LIMIT_EXEMPT_UIDS", {
+  default: "",
 });
 
 // ----------

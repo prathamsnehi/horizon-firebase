@@ -292,7 +292,12 @@ const RATE_LIMITS_COLLECTION = "user_rate_limits";
  */
 function isRateLimitExempt(uid: string): boolean {
   try {
-    return rateLimitExemptUids.value().includes(uid);
+    return rateLimitExemptUids
+      .value()
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .includes(uid);
   } catch {
     return false;
   }

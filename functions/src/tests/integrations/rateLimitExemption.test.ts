@@ -3,7 +3,7 @@
  * utils/rateLimit.test.ts can't see it. These pin the two things that matter:
  * the default exempts nobody, and a configured uid bypasses all three phases.
  */
-const mockValue = jest.fn<string[], []>();
+const mockValue = jest.fn<string, []>();
 
 jest.mock("../../config", () => ({
   BATCH_TTL_MS: 60 * 24 * 60 * 60 * 1000,
@@ -47,7 +47,7 @@ describe("rate-limit exemption", () => {
   });
 
   describe("with no uids configured (the production default)", () => {
-    beforeEach(() => mockValue.mockReturnValue([]));
+    beforeEach(() => mockValue.mockReturnValue(""));
 
     it("gates every user through the normal reservation transaction", async () => {
       const res = await reserveRateLimitSlot(NORMAL, "curated");
@@ -63,7 +63,7 @@ describe("rate-limit exemption", () => {
   });
 
   describe("with a configured uid", () => {
-    beforeEach(() => mockValue.mockReturnValue([EXEMPT]));
+    beforeEach(() => mockValue.mockReturnValue(EXEMPT));
 
     it("allows the exempt uid without a transaction or a pending stamp", async () => {
       const res = await reserveRateLimitSlot(EXEMPT, "curated");
@@ -97,6 +97,26 @@ describe("rate-limit exemption", () => {
     );
 
     it("fails closed — nobody is exempt", async () => {
+      await reserveRateLimitSlot(EXEMPT, "curated");
+      expect(runTransaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("parsing the configured value", () => {
+    it("accepts a comma-separated list with surrounding whitespace", async () => {
+      mockValue.mockReturnValue(`someone, ${EXEMPT} , another`);
+      await reserveRateLimitSlot(EXEMPT, "curated");
+      expect(runTransaction).not.toHaveBeenCalled();
+    });
+
+    it("treats an empty or whitespace-only value as nobody exempt", async () => {
+      mockValue.mockReturnValue("  ,  ,");
+      await reserveRateLimitSlot(EXEMPT, "curated");
+      expect(runTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not match on a partial uid", async () => {
+      mockValue.mockReturnValue(EXEMPT.slice(0, 4));
       await reserveRateLimitSlot(EXEMPT, "curated");
       expect(runTransaction).toHaveBeenCalledTimes(1);
     });
