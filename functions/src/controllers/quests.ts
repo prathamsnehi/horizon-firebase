@@ -35,6 +35,7 @@ import {
   groqApiKey,
   mistralApiKey,
   cerebrasApiKey,
+  rateLimitExemptUids,
   CURATED_BATCH_SIZE,
   BATCH_TTL_MS,
   PREGEN_TASK_NAME,
@@ -47,6 +48,11 @@ const LLM_SECRETS = [
   mistralApiKey,
   cerebrasApiKey,
 ];
+
+// Both callables enforce the 24h limit, so they also need the exempt-uid
+// secret. A secret is only readable by a function that declares it; the
+// pre-gen task never rate-limits, so it deliberately does not.
+const CALLABLE_SECRETS = [...LLM_SECRETS, rateLimitExemptUids];
 
 /**
  * Lightweight moderation for the freeform describe prompt. v1: reject obviously
@@ -86,7 +92,7 @@ async function enqueuePregen(payload: PregenTaskPayload): Promise<void> {
  * (CURATED_BATCH_SIZE); the request carries only { profile, excludeTitles? }.
  */
 export const generateCuratedQuests = functions.https.onCall(
-  { enforceAppCheck: true, secrets: LLM_SECRETS },
+  { enforceAppCheck: true, secrets: CALLABLE_SECRETS },
   async (request): Promise<QuestResponse> => {
     // A: require authentication (App Check is enforced by the runtime).
     if (!request.auth) {
@@ -217,7 +223,7 @@ export const generateCuratedQuests = functions.https.onCall(
  * DIFFERENT prompt the same day is rejected as rate-limited.
  */
 export const generateUserDescribedQuest = functions.https.onCall(
-  { enforceAppCheck: true, secrets: LLM_SECRETS },
+  { enforceAppCheck: true, secrets: CALLABLE_SECRETS },
   async (request): Promise<DescribedQuestResponse> => {
     // A: require authentication (App Check is enforced by the runtime).
     if (!request.auth) {
