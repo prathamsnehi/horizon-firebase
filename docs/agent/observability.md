@@ -68,28 +68,18 @@ See [tracer.ts](../../functions/src/observability/tracer.ts) (`runTrace` / `span
 / `recordSpan` / `setTraceField`) and `saveGenerationSample` in
 [firestore.ts](../../functions/src/integrations/firestore.ts).
 
-## Pulling samples
+## Reading samples
 
-`functions/scripts/get-trace.js` dumps the collection as clean JSON via the Admin
-SDK (uses ADC + `GOOGLE_CLOUD_PROJECT=horizon-sidequests`):
+The `/admin` dashboard in `hosting/` reads them live from Firestore — health
+metrics over a time window, and a log viewer that renders each sample's spans as
+a waterfall with the `attemptLog` failover chain and every stage's input/output.
+See [../developer/admin-dashboard.md](../developer/admin-dashboard.md).
 
-```bash
-cd functions
-node scripts/get-trace.js               # most recent sample
-node scripts/get-trace.js --last 5      # the last 5
-node scripts/get-trace.js <docId>       # a specific sample
-node scripts/get-trace.js --type curated
-```
-
-## Visualizing
-
-Pipe that JSON into the waterfall viewer:
-
-**Horizon Trace Viewer** → https://claude.ai/code/artifact/6b3223ae-4a13-45ca-8322-7e8c7c32a0a2
-
-It renders the ordered spans as a timeline (offset + latency), surfaces the
-`attemptLog` failover chain, and shows each stage's inputs and outputs — the
-fastest way to see *why* a batch generated the way it did.
+It reads with the Firestore **client** SDK, gated by the security rules
+(`admins/{uid}` must exist). There is no longer a script or an Admin SDK path for
+this — a second reader would be a second thing to keep in step with the sample
+schema. The Firestore console is the zero-setup fallback if the dashboard is ever
+unavailable.
 
 ## Known gap — no quality labels
 

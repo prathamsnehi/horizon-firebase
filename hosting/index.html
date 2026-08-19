@@ -7,28 +7,29 @@
     <meta name="description" content="Coming very soon." />
     <meta name="robots" content="noindex" />
     <style>
+      /* The coming-soon page is inlined so `/` paints its final look on the
+         first byte, before any JS parses. React renders the identical markup
+         over it on mount, so there is no flash and no layout shift. */
       html,
-      body {
+      body,
+      #root {
         margin: 0;
         height: 100%;
         background: #000;
       }
-      body {
+      .boot {
         display: flex;
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        color: #fff;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        text-rendering: optimizeLegibility;
-      }
-      main {
-        text-align: center;
         padding: 24px;
+        text-align: center;
+        color: #fff;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-      h1 {
+      .boot h1 {
         margin: 0;
         font-weight: 500;
         letter-spacing: 0.02em;
@@ -46,15 +47,16 @@
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        h1 {
+        .boot h1 {
           animation: none;
         }
       }
     </style>
   </head>
   <body>
-    <main>
-      <h1>coming very soon</h1>
-    </main>
+    <div id="root">
+      <div class="boot"><h1>coming very soon</h1></div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

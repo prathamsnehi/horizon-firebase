@@ -72,6 +72,23 @@ Deferred because it requires a frontend/onboarding change — the current push i
 
 ---
 
+## Dashboard scale — a compact stats collection
+
+**Status:** Idea / only bites past ~1k samples a day
+**Effort:** Small (backend + a dashboard swap)
+
+The `/admin` dashboard aggregates client-side over whole `generation_samples`
+documents, because the Firestore web SDK cannot project a field subset
+(`select()` is Admin-SDK only). Samples embed full quests and span payloads, so
+the page caps itself at the 300 most recent in the window and says so on screen.
+
+When volume makes that bite, have `saveGenerationSample` also write a compact
+`generation_stats` doc — outcome, per-stage latencies, provider, cache hit, maps
+hit — and point the dashboard at that instead. The full samples stay as they are
+for the log viewer and the training corpus.
+
+---
+
 ## Cost reference (as of 2026-06-30)
 
 - Places API (New) Text Search bills **per call**, at the highest SKU tier any requested field touches. Current tier: **Pro (\~$32 / 1,000 calls = \~$0.032/call, \~5,000 free/month)** — see #5 for how it was reduced from Enterprise + Atmosphere.

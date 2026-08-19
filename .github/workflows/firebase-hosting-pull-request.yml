@@ -14,7 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Static "coming soon" site — no build step; the `hosting/` dir is served as-is.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hosting/package-lock.json
+      - run: npm ci
+        working-directory: hosting
+      # Builds the coming-soon page and the lazy-loaded /admin dashboard into
+      # hosting/dist, which is what firebase.json serves. The Firebase web
+      # config is public and lives in the source, so there is nothing to inject.
+      - run: npm run build
+        working-directory: hosting
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

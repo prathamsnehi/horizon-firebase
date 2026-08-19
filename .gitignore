@@ -6,6 +6,12 @@
 *.cache
 hosting/.cache
 
+# Firebase Hosting (Vite app)
+/hosting/node_modules/
+/hosting/dist/
+*.tsbuildinfo
+*/node_modules/
+
 # Firebase Functions
 /functions/node_modules/
 /functions/.env
