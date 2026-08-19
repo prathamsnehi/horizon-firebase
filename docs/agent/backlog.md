@@ -1,8 +1,8 @@
 # Horizon Backend — Planned Architectural Changes
 
-A living backlog of architectural changes under consideration but **not yet implemented**. This is a thinking space, not a commitment — items here are ideas to track, weigh, and sequence. When something ships, move any lasting detail into [production-architecture.md](./production-architecture.md) and remove it from here.
+A living backlog of architectural changes under consideration but **not yet implemented**. This is a thinking space, not a commitment — items here are ideas to track, weigh, and sequence. When something ships, move any lasting detail into [architecture.md](./architecture.md) and remove it from here.
 
-Related docs: [production-architecture.md](./production-architecture.md) (the aspirational production design), [api-contracts.md](../api/api-contracts.md) (the contract source of truth).
+Related docs: [architecture.md](./architecture.md) (the aspirational production design), [api-contracts.md](../api/api-contracts.md) (the contract source of truth).
 
 _Last updated: 2026-07-02_
 
