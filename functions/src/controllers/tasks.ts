@@ -38,7 +38,7 @@ export const pregenerateCuratedBatch = onTaskDispatched(
       return;
     }
 
-    await runTrace({ type: "pregen", uid }, async () => {
+    await runTrace({ type: "pregen" }, async () => {
       try {
         const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
         await savePregeneratedBatch(uid, quests, hashProfile(profile));

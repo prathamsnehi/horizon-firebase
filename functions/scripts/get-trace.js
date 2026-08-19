@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Dump `debug_logs` trace documents as clean JSON for the Horizon Trace Viewer.
- * (TEST BRANCH tooling — reads the debug_logs collection written by the tracer.)
+ * Dump `generation_samples` documents as clean JSON for the Horizon Trace Viewer.
+ * The records are anonymous — no uid — so they are safe to pull and share.
  *
  * Auth: uses Application Default Credentials. Run once:
  *     gcloud auth application-default login
@@ -20,7 +20,7 @@ const admin = require("firebase-admin");
 
 admin.initializeApp(); // resolves project + credentials from ADC / GOOGLE_CLOUD_PROJECT
 const db = admin.firestore();
-const COLLECTION = "debug_logs";
+const COLLECTION = "generation_samples";
 
 function parseArgs(argv) {
   const args = { id: null, last: 1, type: null };

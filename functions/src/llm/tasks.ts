@@ -20,6 +20,7 @@ import {
 } from "./schemas";
 import { saveLog } from "../integrations/firestore";
 import { recordSpan } from "../observability/tracer";
+import { scrubText } from "../observability/sanitize";
 import { RoutingResult } from "./types";
 
 /**
@@ -74,7 +75,7 @@ export async function generateLocationConcepts(
   const locationConcepts = result.object.locationConcepts ?? [];
   recordSpan("scout", {
     latencyMs: result.latencyMs,
-    input: { prompt, count, excludeTitles },
+    input: { count, excludeTitles },
     output: { locationConcepts },
     meta: routingMeta(result),
   });
@@ -106,7 +107,7 @@ export async function generateQuestsWriter(
   const rawQuests = result.object.quests ?? [];
   recordSpan("writer", {
     latencyMs: result.latencyMs,
-    input: { prompt, locations: locationsWithIds, userIntent },
+    input: { locations: locationsWithIds, userIntent: scrubText(userIntent) },
     output: { quests: rawQuests },
     meta: routingMeta(result),
   });
@@ -184,7 +185,7 @@ export async function generateGenericQuests(
   const rawQuests = result.object.quests ?? [];
   recordSpan("generic", {
     latencyMs: result.latencyMs,
-    input: { prompt, count, excludeTitles, userIntent },
+    input: { count, excludeTitles, userIntent: scrubText(userIntent) },
     output: { quests: rawQuests },
     meta: routingMeta(result, reason ? { reason } : undefined),
   });
@@ -215,7 +216,7 @@ export async function planDescribedQuest(
   logCall("planner", result);
   recordSpan("planner", {
     latencyMs: result.latencyMs,
-    input: { userPrompt: prompt, plannerPrompt },
+    input: { userPrompt: scrubText(prompt) },
     output: { plan: result.object },
     meta: routingMeta(result),
   });

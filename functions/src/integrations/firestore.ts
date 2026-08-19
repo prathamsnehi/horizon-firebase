@@ -72,10 +72,15 @@ export async function flushLogs(): Promise<void> {
 }
 
 // ------------------------------
-// End-to-end request tracing (debug_logs) — TEST BRANCH ONLY
+// End-to-end generation samples (generation_samples)
+// ------------------------------
+// One anonymous record per generation: pipeline waterfall, inputs, outputs,
+// and outcome. Doubles as the error log and the training corpus. Carries no
+// uid and nothing that could re-link samples to a person, so it runs in every
+// environment and is retained indefinitely (no TTL, unlike pregen_cache).
 // ------------------------------
 
-const DEBUG_LOGS_COLLECTION = "debug_logs";
+const GENERATION_SAMPLES_COLLECTION = "generation_samples";
 
 /**
  * Persist one end-to-end trace document (built by the tracer). Awaited by the
@@ -83,14 +88,14 @@ const DEBUG_LOGS_COLLECTION = "debug_logs";
  * can freeze. Never throws — a tracing failure must not affect the request.
  * Takes a plain object to avoid a type cycle with the tracer module.
  */
-export async function saveTrace(doc: Record<string, unknown>): Promise<void> {
+export async function saveGenerationSample(doc: Record<string, unknown>): Promise<void> {
   try {
     // A JSON round-trip strips `undefined` (which Firestore rejects) and any
     // non-plain values from the arbitrary captured input/output objects.
     const safe = JSON.parse(JSON.stringify(doc));
-    await getDb().collection(DEBUG_LOGS_COLLECTION).add(safe);
+    await getDb().collection(GENERATION_SAMPLES_COLLECTION).add(safe);
   } catch (err) {
-    console.error("[saveTrace] Failed to persist trace:", err);
+    console.error("[saveGenerationSample] Failed to persist sample:", err);
   }
 }
 
