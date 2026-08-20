@@ -18,31 +18,9 @@ import {
   genericQuestsSchema,
   describePlanSchema,
 } from "./schemas";
-import { saveLog } from "../integrations/firestore";
 import { recordSpan } from "../observability/tracer";
 import { scrubText } from "../observability/sanitize";
 import { RoutingResult } from "./types";
-
-/**
- * Records a PII-free observability log for one routed AI call: which provider/
- * model served, how many attempts, and latency. No profile, prompt, response,
- * or device identifier is stored — this is only for the load/latency dashboard.
- * Best-effort (fire-and-forget inside saveLog).
- */
-function logCall(
-  stage: "scout" | "writer" | "generic" | "planner",
-  result: RoutingResult<unknown>,
-): void {
-  saveLog({
-    stage,
-    provider: result.providerUsed,
-    model: result.modelUsed,
-    attempts: result.attempts,
-    latencyMs: result.latencyMs,
-    success: true,
-    createdAt: Date.now(),
-  });
-}
 
 /** Routing provider/model/attempts + failover chain, as trace-span meta. */
 function routingMeta(
@@ -71,7 +49,6 @@ export async function generateLocationConcepts(
     schema: locationConceptsSchema,
     prompt,
   });
-  logCall("scout", result);
   const locationConcepts = result.object.locationConcepts ?? [];
   recordSpan("scout", {
     latencyMs: result.latencyMs,
@@ -103,7 +80,6 @@ export async function generateQuestsWriter(
     schema: writerQuestsSchema,
     prompt,
   });
-  logCall("writer", result);
   const rawQuests = result.object.quests ?? [];
   recordSpan("writer", {
     latencyMs: result.latencyMs,
@@ -181,7 +157,6 @@ export async function generateGenericQuests(
     prompt,
     temperature: 0.8,
   });
-  logCall("generic", result);
   const rawQuests = result.object.quests ?? [];
   recordSpan("generic", {
     latencyMs: result.latencyMs,
@@ -213,7 +188,6 @@ export async function planDescribedQuest(
     schema: describePlanSchema,
     prompt: plannerPrompt,
   });
-  logCall("planner", result);
   recordSpan("planner", {
     latencyMs: result.latencyMs,
     input: { userPrompt: scrubText(prompt) },

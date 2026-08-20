@@ -11,7 +11,6 @@ import {
   planDescribedQuest,
 } from "../llm";
 import { getBestLocation, fetchPlacePhotoBytes } from "../integrations/maps";
-import { saveLog } from "../integrations/firestore";
 import { span, recordSpan } from "../observability/tracer";
 import {
   calculateDistanceMiles,
@@ -79,8 +78,7 @@ export async function generateBatch(
     throw new Error("Pass 1 failed to generate location concepts.");
   }
 
-  // --- STEP 2: LOCATION RESOLUTION (parallel; latency logged) ---
-  const tMaps = Date.now();
+  // --- STEP 2: LOCATION RESOLUTION (parallel) ---
   const rawMapsResults = await Promise.all(
     locationConcepts.map((concept) =>
       span("maps.resolve", () => getBestLocation(concept.textQuery), {
@@ -92,7 +90,6 @@ export async function generateBatch(
       })
     )
   );
-  saveLog({ stage: "maps", latencyMs: Date.now() - tMaps, createdAt: Date.now() });
   const validLocations = rawMapsResults.filter(
     (loc): loc is LocationInformation => loc !== null
   );

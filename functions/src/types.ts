@@ -165,23 +165,6 @@ export interface PregenTaskPayload {
   profile: UserProfile;
 }
 
-/**
- * Represents a document in the `logs` collection. PII-free observability record
- * for a single generation-pipeline stage: its latency, plus (for AI stages)
- * which provider/model served it. The raw substrate for the load/latency
- * dashboard. Intentionally stores NO profile, prompt, response, or device id.
- */
-export interface LogDocument {
-  stage: "scout" | "maps" | "writer" | "generic" | "planner";
-  latencyMs: number; // wall-clock of the stage
-  createdAt: number; // Unix timestamp in milliseconds
-  // AI stages only:
-  provider?: string; // e.g. "gemini", "groq"
-  model?: string; // e.g. "gemini-3.5-flash"
-  attempts?: number; // how many candidates were tried before success
-  success?: boolean;
-}
-
 // ------------------------------
 // Global rate-limiting (Firestore multi-window limiter):
 // ------------------------------

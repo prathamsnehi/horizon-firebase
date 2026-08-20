@@ -2,7 +2,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { PregenTaskPayload } from "../types";
 import { generateBatch } from "../services/questService";
 import { hashProfile } from "../utils/hash";
-import { flushLogs, savePregeneratedBatch } from "../integrations/firestore";
+import { savePregeneratedBatch } from "../integrations/firestore";
 import { runTrace, setTraceField } from "../observability/tracer";
 import {
   geminiApiKey,
@@ -42,7 +42,6 @@ export const pregenerateCuratedBatch = onTaskDispatched(
       try {
         const quests = await generateBatch(profile, CURATED_BATCH_SIZE, []);
         await savePregeneratedBatch(uid, quests, hashProfile(profile));
-        await flushLogs();
         setTraceField({ result: { quests } });
         console.log(
           `[pregenerateCuratedBatch] Stored next batch for ${uid}.`,

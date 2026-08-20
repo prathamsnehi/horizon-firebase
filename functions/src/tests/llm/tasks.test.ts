@@ -1,7 +1,7 @@
 // Drive the REAL generateQuestsWriter with a mocked router, to verify the
 // server-side verbatim filter on pushesComfortZoneEdges (handoff §3 / criterion 4).
 jest.mock("../../llm/router", () => ({ generateObjectWithRouting: jest.fn() }));
-jest.mock("../../integrations/firestore", () => ({ saveLog: jest.fn() }));
+jest.mock("../../integrations/firestore", () => ({ saveGenerationSample: jest.fn() }));
 
 import { generateQuestsWriter } from "../../llm/tasks";
 import { generateObjectWithRouting } from "../../llm/router";
