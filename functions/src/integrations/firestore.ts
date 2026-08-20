@@ -6,7 +6,6 @@ import {
   FieldValue,
 } from "firebase-admin/firestore";
 import {
-  LogDocument,
   RateWindowConfig,
   ProviderRateState,
   RateWindowState,
@@ -33,42 +32,6 @@ function getDb(): Firestore {
     db = getFirestore(app);
   }
   return db;
-}
-
-// ------------------------------
-// Pipeline-stage logging (logs)
-// ------------------------------
-
-/**
- * Best-effort writes are tracked here so the handler can flush them before the
- * container freezes (a warm container may otherwise pause an unawaited write).
- */
-const pendingLogWrites: Promise<unknown>[] = [];
-
-/**
- * Persist one PII-free stage log (latency + AI provider/model). Fire-and-forget:
- * failures are logged and swallowed so logging can never break or delay
- * generation. Awaited later via {@link flushLogs}.
- */
-export function saveLog(doc: LogDocument): void {
-  const write = getDb()
-    .collection("logs")
-    .add(doc)
-    .catch((err) => {
-      console.error("[saveLog] Failed to persist log:", err);
-    });
-  pendingLogWrites.push(write);
-}
-
-/**
- * Await any in-flight log writes. Call before returning the response so writes
- * land before the container can freeze. Never throws.
- */
-export async function flushLogs(): Promise<void> {
-  const inflight = pendingLogWrites.splice(0);
-  if (inflight.length) {
-    await Promise.allSettled(inflight);
-  }
 }
 
 // ------------------------------

@@ -20,7 +20,6 @@ import {
   validateExcludeTitles,
 } from "../utils/validation";
 import {
-  flushLogs,
   getPregenCache,
   clearPregenBatch,
   reserveRateLimitSlot,
@@ -176,14 +175,12 @@ export const generateCuratedQuests = functions.https.onCall(
           batch = await generateBatch(profile, CURATED_BATCH_SIZE, excludeTitles ?? []);
         }
 
-        // These three are independent and all best-effort — run them together:
+        // These two are independent and both best-effort — run them together:
         // invalidate the consumed cache entry (so a failed re-gen can't re-serve
-        // the same batch), queue up the next batch, and flush the stage logs
-        // before the container can freeze.
+        // the same batch) and queue up the next batch.
         await Promise.all([
           clearPregenBatch(uid),
           enqueuePregen({ uid, profile }),
-          flushLogs(),
         ]);
 
         console.log(`[generateCuratedQuests] served ${batch.length} quests (cached=${cacheHit})`);
@@ -289,7 +286,6 @@ export const generateUserDescribedQuest = functions.https.onCall(
 
       try {
         const quest = await generateDescribed(prompt, profile);
-        await flushLogs();
         if (!quest) {
           throw new Error("Describe generation produced no quest.");
         }
