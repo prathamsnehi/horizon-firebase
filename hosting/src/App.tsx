@@ -1,11 +1,12 @@
 import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import ComingSoon from "./routes/ComingSoon";
+import Home from "./routes/Home";
 
 /**
  * The admin app — and with it Firebase, the dashboard and the log viewer — is
  * loaded only when someone navigates to /admin. A visitor to `/` downloads the
- * React runtime and the coming-soon component, and nothing else.
+ * React runtime and the marketing site, and nothing else (the marketing route
+ * and everything it imports is deliberately Firebase-free).
  */
 const Admin = lazy(() => import("./routes/admin/Admin"));
 
@@ -24,7 +25,7 @@ function AdminChunk() {
 }
 
 export const router = createBrowserRouter([
-  { path: "/", element: <ComingSoon /> },
+  { path: "/", element: <Home /> },
   { path: "/admin/*", element: <AdminChunk /> },
   { path: "*", element: <Navigate to="/" replace /> },
 ]);

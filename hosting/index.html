@@ -3,60 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Horizon</title>
-    <meta name="description" content="Coming very soon." />
-    <meta name="robots" content="noindex" />
+    <title>Horizon — one quest, today</title>
+    <meta
+      name="description"
+      content="Horizon turns something you avoid into one small quest at a real place near you. iOS, free."
+    />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;600;700&family=Archivo:wght@400;500;600;800&family=Barlow+Condensed:wght@400;500;600;700&family=Caveat:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      /* The coming-soon page is inlined so `/` paints its final look on the
-         first byte, before any JS parses. React renders the identical markup
-         over it on mount, so there is no flash and no layout shift. */
+      /* Light pre-paint so the marketing site at `/` shows no flash before React
+         mounts (Home.tsx then themes <body>). The admin route reverts to its dark
+         dashboard theme on mount. React replaces #root's children, dropping .boot. */
       html,
       body,
       #root {
         margin: 0;
         height: 100%;
-        background: #000;
       }
       .boot {
-        display: flex;
-        align-items: center;
-        justify-content: center;
         min-height: 100vh;
-        padding: 24px;
-        text-align: center;
-        color: #fff;
-        font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-        -webkit-font-smoothing: antialiased;
-      }
-      .boot h1 {
-        margin: 0;
-        font-weight: 500;
-        letter-spacing: 0.02em;
-        font-size: clamp(1.5rem, 6vw, 3rem);
-        opacity: 0.92;
-        animation: breathe 4s ease-in-out infinite;
-      }
-      @keyframes breathe {
-        0%,
-        100% {
-          opacity: 0.55;
-        }
-        50% {
-          opacity: 1;
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .boot h1 {
-          animation: none;
-        }
+        background: #fbf8f3;
       }
     </style>
   </head>
   <body>
-    <div id="root">
-      <div class="boot"><h1>coming very soon</h1></div>
-    </div>
+    <div id="root"><div class="boot"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

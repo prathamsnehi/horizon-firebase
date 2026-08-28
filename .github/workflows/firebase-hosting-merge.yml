@@ -19,7 +19,7 @@ jobs:
           cache-dependency-path: hosting/package-lock.json
       - run: npm ci
         working-directory: hosting
-      # Builds the coming-soon page and the lazy-loaded /admin dashboard into
+      # Builds the marketing site (/) and the lazy-loaded /admin dashboard into
       # hosting/dist, which is what firebase.json serves. The Firebase web
       # config is public and lives in the source, so there is nothing to inject.
       - run: npm run build

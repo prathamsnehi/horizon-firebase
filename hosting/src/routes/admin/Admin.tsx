@@ -54,12 +54,7 @@ export default function Admin() {
   if (auth.status === "not-authorized") {
     return (
       <Centered title="Not authorized">
-        <p className="mb-4 text-tiny text-dim">
-          {auth.user.email} isn&rsquo;t on the admin list.
-        </p>
-        {/* The uid is only knowable after signing in, and it is exactly what
-            has to be pasted into Firestore to grant access — so show it here
-            rather than sending someone hunting through the console. */}
+        {/* The uid is only knowable after signing in, so surface it here. */}
         <UidBlock uid={auth.user.uid} />
         <button
           onClick={() => void auth.signOutNow()}
@@ -142,11 +137,6 @@ function UidBlock({ uid }: { uid: string }) {
       >
         {copied ? "Copied" : "Copy"}
       </button>
-      <p className="mt-3 text-micro leading-relaxed text-muted">
-        Grant access by creating a Firestore document at{" "}
-        <code className="text-dim">admins/{uid}</code> — the contents don&rsquo;t
-        matter, only that it exists.
-      </p>
     </div>
   );
 }

@@ -91,25 +91,47 @@
   .nums {
     font-variant-numeric: tabular-nums;
   }
+}
 
-  /* Carried over verbatim from the static coming-soon page. */
-  .coming-soon {
-    animation: breathe 4s ease-in-out infinite;
+/* ── Marketing site (the public `/` route) ──────────────────────────────────
+ * Home.tsx themes <body> to the light palette per-route via an effect; these
+ * rules cover what inline styles can't — pseudo-classes and keyframes. */
+.hz-site a {
+  color: #211d18;
+}
+.hz-site a:hover {
+  color: #a0552a;
+}
+
+/* Taped polaroid: rest rotation is a CSS var so hover can straighten it to 0. */
+.hz-polaroid {
+  transform: rotate(var(--rot, 0deg));
+  transition: transform 0.25s ease;
+}
+.hz-polaroid:hover {
+  transform: rotate(0deg);
+}
+
+/* Phone-screen micro-animations, referenced from inline `animation`. The
+   translate is baked into hzPulseC so it doesn't fight the walker's centring. */
+@keyframes hzBlink {
+  0%,
+  49% {
+    opacity: 1;
   }
-
-  @keyframes breathe {
-    0%,
-    100% {
-      opacity: 0.55;
-    }
-    50% {
-      opacity: 1;
-    }
+  50%,
+  100% {
+    opacity: 0;
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    .coming-soon {
-      animation: none;
-    }
+}
+@keyframes hzPulseC {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0.15;
   }
 }
