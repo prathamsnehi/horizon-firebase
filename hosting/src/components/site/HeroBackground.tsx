@@ -14,6 +14,9 @@ export function HeroBackground() {
 
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* Instant warm placeholder so the hero reads as an intentional sunrise
+          wash while the full image streams in on top (perceived performance). */}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, #d9c8c3 0%, #f0c6a3 48%, #f9e7d3 78%, #fbf8f3 100%)" }} />
       <motion.div
         className="absolute left-0 right-0"
         style={{

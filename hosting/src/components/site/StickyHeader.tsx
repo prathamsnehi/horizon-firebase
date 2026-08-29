@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
 import { color, font, layout } from "@/lib/tokens";
+import { Magnetic } from "@/components/ui/magnetic";
 
 /**
  * A compact bar that slides in once the hero has scrolled away, keeping a
@@ -44,21 +45,25 @@ export function StickyHeader() {
               <span style={{ width: 20, height: 10, background: color.peach, borderRadius: "20px 20px 0 0", display: "block" }} />
               <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 16, letterSpacing: "-.01em", color: color.ink }}>Horizon</span>
             </a>
-            <a
-              href="#get"
-              style={{
-                fontFamily: font.display,
-                fontSize: 13.5,
-                fontWeight: 700,
-                color: color.paper,
-                background: color.ink,
-                padding: "8px 16px",
-                borderRadius: 8,
-                textDecoration: "none",
-              }}
-            >
-              Join the waitlist
-            </a>
+            <Magnetic strength={0.25}>
+              <motion.a
+                href="#get"
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                style={{
+                  fontFamily: font.display,
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color: color.paper,
+                  background: color.ink,
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                }}
+              >
+                Join the waitlist
+              </motion.a>
+            </Magnetic>
           </div>
         </motion.header>
       )}

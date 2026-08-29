@@ -3,9 +3,9 @@ import { color, font } from "@/lib/tokens";
 
 /**
  * One taped polaroid — the signature hero element, kept pixel-faithful to the
- * original design. Positioning is handled by the parent; this renders just the
- * card, with its rest rotation as a static transform (the hero wraps it in Tilt
- * for the 3D mouse-parallax on top).
+ * original design. Positioning + entrance/exit animation are handled by the parent
+ * (Hero's TapedPolaroid); this renders just the card. Pass `tape={false}` when the
+ * parent animates the tape separately.
  */
 export function PolaroidCard({
   width,
@@ -15,6 +15,7 @@ export function PolaroidCard({
   wellHeight,
   wellLabel,
   caption,
+  tape = true,
 }: {
   width: number;
   rotation: number;
@@ -23,6 +24,7 @@ export function PolaroidCard({
   wellHeight: number;
   wellLabel: string;
   caption: string;
+  tape?: boolean;
 }) {
   return (
     <div
@@ -37,18 +39,20 @@ export function PolaroidCard({
         } as CSSProperties
       }
     >
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: -12,
-          transform: `translateX(-50%) rotate(${tapeRotation}deg)`,
-          width: 76,
-          height: 24,
-          background: "rgba(255,182,147,.6)",
-          border: "1px solid rgba(38,34,27,.1)",
-        }}
-      />
+      {tape && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: -12,
+            transform: `translateX(-50%) rotate(${tapeRotation}deg)`,
+            width: 76,
+            height: 24,
+            background: "rgba(255,182,147,.6)",
+            border: "1px solid rgba(38,34,27,.1)",
+          }}
+        />
+      )}
       <div
         style={{
           height: wellHeight,

@@ -37,7 +37,14 @@ yarn-error.log*
 .secret.*
 *.local
 
+# macOS
+.DS_Store
+
 # AI-Gen Files:
 .claude
+
+# Raw screen-recording originals (large). Only the optimized clips in
+# hosting/public/showcase/ are deployed.
+video-originals
 
 

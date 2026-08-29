@@ -124,13 +124,25 @@ export const QUESTS: DemoQuest[] = [
   },
 ];
 
-/** Slot-machine strings for the "scanning places" beat of the generation. */
+/** Slot-machine strings for the "scanning places" beat of the generation —
+ *  real cities around the world, with flags, to sell the "anywhere" premise. */
 export const PLACE_TICKER: string[] = [
-  ...QUESTS.map((q) => `${q.venue} · ${q.city}`),
-  "a rooftop bar · Bangkok, Thailand",
-  "a canal-side bench · Amsterdam, Netherlands",
-  "a night market · Taipei, Taiwan",
-  "a jazz basement · New Orleans, USA",
-  "a clifftop path · Galway, Ireland",
-  "a bathhouse · Budapest, Hungary",
+  "a tiny ramen bar · Osaka 🇯🇵",
+  "a quiet cove · Cascais 🇵🇹",
+  "an old corner bar · Buenos Aires 🇦🇷",
+  "a window-seat café · Vienna 🇦🇹",
+  "a backstreet record shop · Berlin 🇩🇪",
+  "a hillside viewpoint · Lisbon 🇵🇹",
+  "a small salsa hall · Cali 🇨🇴",
+  "a harbour wall · Reykjavík 🇮🇸",
+  "a karaoke room · Seoul 🇰🇷",
+  "a garden teahouse · Marrakech 🇲🇦",
+  "a morning market · Oaxaca 🇲🇽",
+  "a single-screen cinema · Melbourne 🇦🇺",
+  "a rooftop bar · Bangkok 🇹🇭",
+  "a canal-side bench · Amsterdam 🇳🇱",
+  "a night market · Taipei 🇹🇼",
+  "a jazz basement · New Orleans 🇺🇸",
+  "a clifftop path · Galway 🇮🇪",
+  "a bathhouse · Budapest 🇭🇺",
 ];

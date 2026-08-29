@@ -119,6 +119,22 @@
   }
 }
 
+/* ── Lenis smooth scroll (marketing route only; classes are added to <html>
+ * while Home is mounted, removed on unmount so /admin scrolls natively). */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
 /* ── Marketing site (the public `/` route) ──────────────────────────────────
  * Home.tsx themes <body> to the light palette per-route; these rules cover what
  * inline styles can't — pseudo-classes and keyframes. */
@@ -127,6 +143,45 @@
 }
 .hz-site a:hover {
   color: #a0552a;
+}
+
+/* Warm selection + visible keyboard focus for the light marketing theme. */
+.hz-site ::selection {
+  background: rgba(255, 182, 147, 0.45);
+  color: #211d18;
+}
+.hz-site a:focus-visible,
+.hz-site button:focus-visible,
+.hz-site input:focus-visible {
+  outline: 2px solid #a0552a;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+/* Anchor targets clear the sticky header when jumped to. */
+.hz-site section[id],
+.hz-site [id="get"] {
+  scroll-margin-top: 84px;
+}
+
+/* Animated underline for the header nav links. */
+.hz-nav-link {
+  position: relative;
+}
+.hz-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 1.5px;
+  background: #a0552a;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hz-nav-link:hover::after {
+  transform: scaleX(1);
 }
 
 /* Taped polaroid: rest rotation is a CSS var so hover can straighten it to 0. */

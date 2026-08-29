@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Sparkles, Shuffle, Check, MapPin, Navigation, Clock } from "lucide-react";
 import { color, font } from "@/lib/tokens";
+import { Magnetic } from "@/components/ui/magnetic";
 import { QUESTS, PLACE_TICKER, type DemoQuest } from "./quests";
 
 type Phase = "idle" | "gen" | "done";
@@ -75,6 +76,16 @@ export function QuestGenerator() {
 
   return (
     <div style={{ width: 380, maxWidth: "100%", margin: "0 auto" }}>
+      {/* Screen-reader announcement — updated once per phase so the typewriter
+          doesn't spam assistive tech. */}
+      <div style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }} aria-live="polite">
+        {phase === "gen"
+          ? "Generating a quest…"
+          : phase === "done" && quest
+            ? `Your quest: ${quest.task}. ${quest.venue}, ${quest.city}. ${quest.distance}. Open until ${quest.openUntil}.`
+            : ""}
+      </div>
+
       {/* The card — fixed min-height so generate→reveal doesn't shift the layout */}
       <div
         style={{
@@ -89,16 +100,25 @@ export function QuestGenerator() {
           overflow: "hidden",
         }}
       >
+        {/* a warm flash when a fresh quest lands */}
+        {phase === "done" && quest && (
+          <motion.div
+            key={`glow-${quest.task}`}
+            aria-hidden
+            style={{ position: "absolute", inset: 0, pointerEvents: "none", borderRadius: 22, background: "radial-gradient(120% 90% at 50% 38%, rgba(255,182,147,.5), rgba(255,182,147,0) 68%)" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 0] }}
+            transition={{ duration: 1.0, times: [0, 0.2, 1], ease: "easeOut" }}
+          />
+        )}
+
         <AnimatePresence mode="wait">
           {phase === "idle" && (
-            <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", minHeight: 396 }}>
-              <span style={{ width: 40, height: 20, background: color.peach, borderRadius: "40px 40px 0 0", display: "block", marginBottom: 22 }} />
-              <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1.12, color: color.ink, marginBottom: 12 }}>
-                One small quest, somewhere in the world.
+            <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", minHeight: 396 }}>
+              <span style={{ width: 48, height: 24, background: color.peach, borderRadius: "48px 48px 0 0", display: "block", marginBottom: 22 }} />
+              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1.15, color: color.ink }}>
+                Your quest is one press away.
               </div>
-              <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55, color: color.inkBody }}>
-                Press the button and watch Horizon find you one — a real kind of place, a thing worth doing tonight.
-              </p>
             </motion.div>
           )}
 
@@ -168,9 +188,11 @@ export function QuestGenerator() {
       {/* Controls */}
       <div style={{ marginTop: 22, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
         {phase === "idle" && (
-          <PrimaryButton onClick={generate}>
-            <Sparkles size={17} strokeWidth={2.2} /> Generate tonight&apos;s quest
-          </PrimaryButton>
+          <Magnetic>
+            <PrimaryButton onClick={generate} attention>
+              <Sparkles size={17} strokeWidth={2.2} /> Generate tonight&apos;s quest
+            </PrimaryButton>
+          </Magnetic>
         )}
 
         {phase === "gen" && (
@@ -208,11 +230,20 @@ function QuestRow({ icon, label, value }: { icon: ReactNode; label: string; valu
   );
 }
 
-function PrimaryButton({ children, onClick, disabled }: { children: ReactNode; onClick?: () => void; disabled?: boolean }) {
+function PrimaryButton({ children, onClick, disabled, attention }: { children: ReactNode; onClick?: () => void; disabled?: boolean; attention?: boolean }) {
+  const reduce = useReducedMotion() ?? false;
   return (
-    <button
+    <motion.button
       onClick={onClick}
       disabled={disabled}
+      whileHover={disabled ? undefined : { y: -2 }}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
+      animate={
+        attention && !reduce
+          ? { boxShadow: ["0 12px 26px -14px rgba(160,85,42,.7)", "0 18px 38px -12px rgba(160,85,42,.9)", "0 12px 26px -14px rgba(160,85,42,.7)"] }
+          : undefined
+      }
+      transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -231,14 +262,16 @@ function PrimaryButton({ children, onClick, disabled }: { children: ReactNode; o
       }}
     >
       {children}
-    </button>
+    </motion.button>
   );
 }
 
 function GhostButton({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
   return (
-    <button
+    <motion.button
       onClick={onClick}
+      whileHover={{ y: -2, borderColor: "rgba(33,29,24,.4)" }}
+      whileTap={{ scale: 0.97 }}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -255,6 +288,6 @@ function GhostButton({ children, onClick }: { children: ReactNode; onClick?: () 
       }}
     >
       {children}
-    </button>
+    </motion.button>
   );
 }

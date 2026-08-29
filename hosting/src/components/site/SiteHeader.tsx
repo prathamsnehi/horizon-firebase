@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { color, font, layout } from "../../lib/tokens";
 
 /** Scrolls away normally (fixed nothing). Nav text links hide below 560px. */
@@ -20,14 +21,13 @@ export default function SiteHeader() {
         <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 18, letterSpacing: "-.01em" }}>Horizon</span>
       </div>
       <div style={{ display: "flex", gap: "clamp(14px,3vw,26px)", alignItems: "center", fontSize: 13.5, color: color.ink }}>
-        <a className="hidden min-[560px]:inline" href="#steps" style={{ color: color.ink, fontWeight: 600, textDecoration: "none", textShadow: "0 1px 3px rgba(251,248,243,.7)" }}>
-          How it works
+        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.ink, fontWeight: 600, textDecoration: "none", textShadow: "0 1px 3px rgba(251,248,243,.7)" }}>
+          See it work
         </a>
-        <a className="hidden min-[560px]:inline" href="#steps" style={{ color: color.ink, fontWeight: 600, textDecoration: "none", textShadow: "0 1px 3px rgba(251,248,243,.7)" }}>
-          Quests
-        </a>
-        <a
+        <motion.a
           href="#get"
+          whileHover={{ y: -1 }}
+          whileTap={{ scale: 0.97 }}
           style={{
             fontFamily: font.display,
             fontSize: 14,
@@ -37,10 +37,11 @@ export default function SiteHeader() {
             padding: "9px 17px",
             borderRadius: 8,
             textDecoration: "none",
+            boxShadow: "0 10px 22px -14px rgba(160,85,42,.8)",
           }}
         >
           Join the waitlist
-        </a>
+        </motion.a>
       </div>
     </div>
   );
