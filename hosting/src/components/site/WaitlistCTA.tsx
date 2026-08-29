@@ -92,7 +92,7 @@ export function WaitlistCTA({ id, className, dark = false }: { id?: string; clas
           </motion.form>
         )}
       </AnimatePresence>
-      <p className={cn("mt-2.5 text-[13px]", dark ? "text-white/55" : "text-ink-faint")}>
+      <p className={cn("mt-2.5 text-[13px] font-medium", dark ? "text-white/70" : "text-ink-faint")}>
         {status === "error" ? (
           <span className="text-rust">Enter a valid email — we’ll only use it for your invite.</span>
         ) : (

@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { color, font, layout } from "../../lib/tokens";
+import { DOWNLOAD_URL } from "../../lib/links";
 
 /** Scrolls away normally (fixed nothing). Nav text links hide below 560px. */
 export default function SiteHeader() {
@@ -18,21 +19,21 @@ export default function SiteHeader() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
         <span style={{ width: 22, height: 11, background: color.peach, borderRadius: "22px 22px 0 0", display: "block" }} />
-        <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 18, letterSpacing: "-.01em" }}>Horizon</span>
+        <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 18, letterSpacing: "-.01em", color: color.white }}>Horizon</span>
       </div>
       <div style={{ display: "flex", gap: "clamp(14px,3vw,26px)", alignItems: "center", fontSize: 13.5, color: color.ink }}>
-        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.white, fontWeight: 600, textDecoration: "none" }}>
+        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.white, fontWeight: 700, textDecoration: "none" }}>
           See it work
         </a>
         <motion.a
-          href="#get"
+          href={DOWNLOAD_URL}
           whileHover={{ y: -1 }}
           whileTap={{ scale: 0.97 }}
           style={{
             fontFamily: font.display,
             fontSize: 14,
-            fontWeight: 700,
-            color: color.ink,
+            fontWeight: 800,
+            color: color.white,
             background: color.peach,
             padding: "9px 17px",
             borderRadius: 8,
@@ -40,7 +41,7 @@ export default function SiteHeader() {
             boxShadow: "0 10px 22px -14px rgba(160,85,42,.8)",
           }}
         >
-          Join the waitlist
+          Download
         </motion.a>
       </div>
     </div>

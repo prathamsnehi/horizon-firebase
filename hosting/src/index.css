@@ -65,10 +65,11 @@
   --color-rust: #a0552a; /* peach's readable-on-light sibling */
   --color-forest: #4a7a5c; /* "COMPLETED" state only */
 
-  /* Marketing type families (loaded via index.html <link>) */
-  --font-display: "Archivo", system-ui, sans-serif;
-  --font-body-warm: "Karla", system-ui, sans-serif;
-  --font-condensed: "Barlow Condensed", sans-serif;
+  /* Marketing type families (loaded via index.html <link>). Hanken Grotesk =
+     one crisp humanist sans across display/body/CTA; Caveat for asides. */
+  --font-display: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-body-warm: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-condensed: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
   --font-hand: "Caveat", cursive;
 
   /* Type */

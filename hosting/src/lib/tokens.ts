@@ -31,9 +31,9 @@ export const color = {
 } as const;
 
 export const font = {
-  display: "'Archivo', system-ui, sans-serif", // 800 weight, tight tracking
-  condensed: "'Barlow Condensed', sans-serif", // 700, uppercase — CTA only
-  body: "'Karla', system-ui, sans-serif", // 400–700
+  display: "'Hanken Grotesk', system-ui, -apple-system, sans-serif", // crisp humanist sans — headlines, labels
+  condensed: "'Hanken Grotesk', system-ui, -apple-system, sans-serif", // CTA display
+  body: "'Hanken Grotesk', system-ui, -apple-system, sans-serif", // body copy
   hand: "'Caveat', cursive", // asides only, never body copy
 } as const;
 

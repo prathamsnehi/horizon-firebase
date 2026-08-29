@@ -43,8 +43,9 @@ yarn-error.log*
 # AI-Gen Files:
 .claude
 
-# Raw screen-recording originals (large). Only the optimized clips in
-# hosting/public/showcase/ are deployed.
+# Raw images and recordings originals (large). Only the optimized versions in
+# hosting/public/*
 video-originals
+image-originals
 
 

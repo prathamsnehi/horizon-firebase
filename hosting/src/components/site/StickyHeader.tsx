@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
 import { color, font, layout } from "@/lib/tokens";
 import { Magnetic } from "@/components/ui/magnetic";
+import { DOWNLOAD_URL } from "@/lib/links";
 
 /**
  * A compact bar that slides in once the hero has scrolled away, keeping a
@@ -47,7 +48,7 @@ export function StickyHeader() {
             </a>
             <Magnetic strength={0.25}>
               <motion.a
-                href="#get"
+                href={DOWNLOAD_URL}
                 whileHover={{ y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 style={{
@@ -61,7 +62,7 @@ export function StickyHeader() {
                   textDecoration: "none",
                 }}
               >
-                Join the waitlist
+                Download
               </motion.a>
             </Magnetic>
           </div>
