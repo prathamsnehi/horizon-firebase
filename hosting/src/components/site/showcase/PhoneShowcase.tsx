@@ -18,7 +18,7 @@ const SCREENS = [
   { base: "/showcase/app-04-log", label: "Into the log", caption: "Post how it went. The radius widens, and it stays private." },
 ];
 const N = SCREENS.length;
-const STEP_VH = 170; // scroll length per clip (roomy, so each beat lands one at a time)
+const STEP_VH = 320; // scroll length per clip — long, so normal-speed scrolling still scrubs smoothly
 const SCREEN_W = 300;
 const SCREEN_H = 650;
 

@@ -124,23 +124,6 @@ export default function Hero() {
     >
       <HeroBackground />
 
-      {/* Legibility scrim: paper dissolves in under the copy so the dark text stays
-          readable over the image, while the vivid sky + flowers show through on the
-          right behind the polaroids. Left-to-paper on desktop; top-to-paper on
-          narrow, where the copy stacks above the polaroids. */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 0,
-          pointerEvents: "none",
-          background: narrow
-            ? "linear-gradient(180deg, rgba(251,248,243,.88) 0%, rgba(251,248,243,.68) 32%, rgba(251,248,243,.3) 50%, rgba(251,248,243,0) 64%)"
-            : "linear-gradient(90deg, rgba(251,248,243,.95) 0%, rgba(251,248,243,.78) 20%, rgba(251,248,243,.52) 34%, rgba(251,248,243,.16) 48%, rgba(251,248,243,0) 60%)",
-        }}
-      />
-
       {/* Nav overlaps the hero so the background reads as one continuous image. */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 6 }}>
         <SiteHeader />
@@ -202,7 +185,7 @@ export default function Hero() {
               fontWeight: 800,
               letterSpacing: "-.038em",
               maxWidth: 560,
-              color: color.ink,
+              color: color.white,
               textWrap: "pretty",
             }}
           >
@@ -210,13 +193,13 @@ export default function Hero() {
           </TextEffect>
 
           {/* Paragraph */}
-          <motion.p variants={rise} style={{ margin: "0 0 28px", fontSize: "clamp(15.5px,1.6vw,17px)", lineHeight: 1.6, maxWidth: 420, color: color.inkBody }}>
+          <motion.p variants={rise} style={{ margin: "0 0 28px", fontSize: "clamp(15.5px,1.6vw,17px)", lineHeight: 1.6, maxWidth: 420, color: color.white }}>
             Tell it what you avoid. It hands back one small quest — a real place, close enough to walk to tonight.
           </motion.p>
 
           {/* Waitlist CTA */}
           <motion.div variants={rise}>
-            <WaitlistCTA id="get" />
+            <WaitlistCTA id="get" dark />
           </motion.div>
 
           {/* Handwritten aside */}
@@ -226,7 +209,7 @@ export default function Hero() {
               fontFamily: font.hand,
               fontSize: 21,
               lineHeight: 1.35,
-              color: color.inkHand,
+              color: "#F4E7D6", // warm cream — the aside sits over the dark foreground
               maxWidth: 330,
               marginTop: 22,
               transform: "rotate(-.8deg)",

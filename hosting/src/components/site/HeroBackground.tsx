@@ -1,11 +1,11 @@
 import { motion, useScroll, useTransform, useReducedMotion } from "motion/react";
 
 /**
- * The hero's backdrop — the painterly sunrise illustration (public/hero-img.png).
- * The image drifts slower than the page as you scroll (subtle parallax) for depth;
- * it's given extra height so the drift never reveals an edge. The legibility scrim
- * (in Hero.tsx) and the bottom fade below stay fixed. Parallax is disabled under
- * reduced motion. Purely decorative.
+ * The hero's backdrop — the dusk-skyline photo (public/hero-img.png). The image
+ * drifts slower than the page as you scroll (subtle parallax) for depth; it's given
+ * extra height so the drift never reveals an edge. No scrim or bottom fade — the
+ * photo runs full-bleed for immersion, and legibility is carried by the text itself
+ * (color + a soft halo in Hero.tsx). Parallax is disabled under reduced motion.
  */
 export function HeroBackground() {
   const reduce = useReducedMotion();
@@ -27,11 +27,6 @@ export function HeroBackground() {
           backgroundSize: "cover",
           backgroundPosition: "center center",
         }}
-      />
-      {/* settle to paper at the bottom so the section seams cleanly into the page below */}
-      <div
-        className="absolute inset-x-0 bottom-0 h-[22%]"
-        style={{ background: "linear-gradient(180deg, rgba(251,248,243,0), #FBF8F3 92%)" }}
       />
     </div>
   );

@@ -21,7 +21,7 @@ export default function SiteHeader() {
         <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 18, letterSpacing: "-.01em" }}>Horizon</span>
       </div>
       <div style={{ display: "flex", gap: "clamp(14px,3vw,26px)", alignItems: "center", fontSize: 13.5, color: color.ink }}>
-        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.ink, fontWeight: 600, textDecoration: "none", textShadow: "0 1px 3px rgba(251,248,243,.7)" }}>
+        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.white, fontWeight: 600, textDecoration: "none" }}>
           See it work
         </a>
         <motion.a
