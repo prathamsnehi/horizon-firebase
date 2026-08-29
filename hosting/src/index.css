@@ -1,71 +1,97 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /*
  * Palette. Every data color below is VALIDATED, not chosen by eye —
- * scripts/validate_palette.js from the dataviz skill, run against this file's
- * own --surface (#1a1a19) in dark mode:
+ * scripts/validate_palette.js from the dataviz skill, run against --surface
+ * (#1a1a19) in dark mode:
  *
  *   categorical (8 slots) ... all checks PASS
  *                             worst adjacent CVD ΔE 8.4, normal-vision 19.3
  *   status (4 roles) ........ separation + contrast PASS
- *                             (the lightness-band check is a categorical
- *                              criterion the fixed status palette sits outside
- *                              by design; every status use pairs with a label)
  *   ordinal blue (2 steps) .. all checks PASS
  *
  * The status ORDER is load-bearing: success → rate_limited → error → invalid
- * was picked because it was the only ordering of the four whose adjacent pairs
- * clear both the CVD and normal-vision floors. Reordering them re-fails it.
+ * was the only ordering whose adjacent pairs clear both the CVD and normal-vision
+ * floors. Reordering them re-fails it. (Migrated verbatim from the Tailwind v3
+ * config into the v4 CSS-first @theme; the RGB values are unchanged.)
  */
+@theme {
+  /* Surfaces */
+  --color-page: rgb(13 13 13);
+  --color-surface: rgb(26 26 25); /* cards + chart surface — the validator's reference */
+  --color-raised: rgb(35 35 34); /* nested surfaces, table hover */
+  --color-grid: rgb(44 44 42); /* gridline hairline */
+  --color-axis: rgb(56 56 53); /* baseline / axis */
+  --color-line: rgb(44 44 42); /* UI hairlines */
+
+  /* Ink — text NEVER wears a series color */
+  --color-fg: rgb(255 255 255);
+  --color-dim: rgb(195 194 183);
+  --color-muted: rgb(137 135 129);
+
+  /* Brand accent: UI chrome only (focus, selection). Never encodes data. */
+  --color-accent: rgb(255 182 147);
+
+  /* Categorical series, fixed slot order. Assigned by identity, never cycled. */
+  --color-s1: rgb(57 135 229);
+  --color-s2: rgb(217 89 38);
+  --color-s3: rgb(25 158 112);
+  --color-s4: rgb(201 133 0);
+  --color-s5: rgb(213 81 129);
+  --color-s6: rgb(0 131 0);
+  --color-s7: rgb(144 133 233);
+  --color-s8: rgb(230 103 103);
+
+  /* Status — reserved for state, never reused as "series 5" */
+  --color-good: rgb(12 163 12);
+  --color-warning: rgb(250 178 25);
+  --color-critical: rgb(208 59 59);
+  --color-serious: rgb(236 131 90);
+
+  /* Ordinal ramp, one hue, for the two quantiles of one measure */
+  --color-q50: rgb(134 182 239);
+  --color-q95: rgb(57 135 229);
+
+  /* ── Marketing site palette (the public `/` route) — warm/editorial. Separate
+     from the dashboard roles above; used as Tailwind tokens (bg-peach, text-ink…). */
+  --color-paper: #fbf8f3; /* page + phone-screen background */
+  --color-paper-warm: #fcfaf4; /* polaroid card stock */
+  --color-ink: #211d18; /* primary text, dark buttons */
+  --color-ink-body: #4a4338; /* body copy */
+  --color-ink-muted: #6e6659; /* nav links, secondary copy */
+  --color-ink-faint: #8a8073; /* meta, captions, footer */
+  --color-ink-hand: #8a6b4a; /* handwritten aside */
+  --color-peach: #ffb693; /* brand — CTA fill, pins, eyebrow */
+  --color-rust: #a0552a; /* peach's readable-on-light sibling */
+  --color-forest: #4a7a5c; /* "COMPLETED" state only */
+
+  /* Marketing type families (loaded via index.html <link>) */
+  --font-display: "Archivo", system-ui, sans-serif;
+  --font-body-warm: "Karla", system-ui, sans-serif;
+  --font-condensed: "Barlow Condensed", sans-serif;
+  --font-hand: "Caveat", cursive;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  --text-tiny: 0.75rem;
+  --text-tiny--line-height: 1.125rem;
+
+  /* 4px rounded data-ends on bars, per the mark spec. */
+  --radius-mark: 4px;
+}
 
 @layer base {
-  :root {
-    /* Surfaces */
-    --page: 13 13 13;
-    --surface: 26 26 25; /* cards + chart surface — the validator's reference */
-    --raised: 35 35 34; /* nested surfaces, table hover */
-    --grid: 44 44 42; /* gridline hairline */
-    --axis: 56 56 53; /* baseline / axis */
-    --line: 44 44 42; /* UI hairlines */
-
-    /* Ink — text NEVER wears a series color */
-    --fg: 255 255 255;
-    --dim: 195 194 183;
-    --muted: 137 135 129;
-
-    /* Brand accent: UI chrome only (focus, selection). Never encodes data. */
-    --accent: 255 182 147;
-
-    /* Categorical series, in fixed slot order. Assigned by identity, never
-       cycled, never reordered by rank. */
-    --s1: 57 135 229;
-    --s2: 217 89 38;
-    --s3: 25 158 112;
-    --s4: 201 133 0;
-    --s5: 213 81 129;
-    --s6: 0 131 0;
-    --s7: 144 133 233;
-    --s8: 230 103 103;
-
-    /* Status — reserved for state, never reused as "series 5" */
-    --good: 12 163 12;
-    --warning: 250 178 25;
-    --critical: 208 59 59;
-    --serious: 236 131 90;
-
-    /* Ordinal ramp, one hue, for the two quantiles of one measure */
-    --q50: 134 182 239;
-    --q95: 57 135 229;
-  }
-
   html,
   body,
   #root {
     height: 100%;
   }
 
+  /* Dark dashboard theme is the <body> default; the marketing route (Home.tsx)
+     overrides <body> to the light palette per-route and reverts on unmount. */
   body {
     @apply bg-page text-fg font-sans antialiased;
   }
@@ -94,8 +120,8 @@
 }
 
 /* ── Marketing site (the public `/` route) ──────────────────────────────────
- * Home.tsx themes <body> to the light palette per-route via an effect; these
- * rules cover what inline styles can't — pseudo-classes and keyframes. */
+ * Home.tsx themes <body> to the light palette per-route; these rules cover what
+ * inline styles can't — pseudo-classes and keyframes. */
 .hz-site a {
   color: #211d18;
 }
@@ -133,5 +159,18 @@
   50% {
     transform: translate(-50%, -50%) scale(1.5);
     opacity: 0.15;
+  }
+}
+
+/* Honour reduce-motion for the marketing site's CSS animations (the phone
+   cursor blink + walker pulse). Motion-library animations are handled by the
+   <MotionConfig reducedMotion="user"> wrapper in Home.tsx. */
+@media (prefers-reduced-motion: reduce) {
+  .hz-site *,
+  .hz-site *::before,
+  .hz-site *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

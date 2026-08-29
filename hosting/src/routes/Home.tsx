@@ -1,7 +1,8 @@
 import { useLayoutEffect } from "react";
-import SiteHeader from "../components/site/SiteHeader";
+import { MotionConfig } from "motion/react";
+import { StickyHeader } from "../components/site/StickyHeader";
 import Hero from "../components/site/Hero";
-import ScrollStory from "../components/site/ScrollStory";
+import Showcase from "../components/site/Showcase";
 import CtaFooter from "../components/site/CtaFooter";
 import { color, font } from "../lib/tokens";
 
@@ -33,11 +34,15 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="hz-site">
-      <SiteHeader />
-      <Hero />
-      <ScrollStory />
-      <CtaFooter />
-    </div>
+    // reducedMotion="user" makes every motion animation on the marketing site
+    // honour the visitor's OS "reduce motion" setting automatically.
+    <MotionConfig reducedMotion="user">
+      <div className="hz-site" id="top">
+        <StickyHeader />
+        <Hero />
+        <Showcase />
+        <CtaFooter />
+      </div>
+    </MotionConfig>
   );
 }
