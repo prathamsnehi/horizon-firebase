@@ -44,10 +44,12 @@ export default function Privacy() {
     b.style.background = color.paper;
     b.style.color = color.ink;
     b.style.fontFamily = font.body;
+    const prevTitle = document.title;
     document.title = "Privacy — Horizon";
     return () => {
       if (prev === null) b.removeAttribute("style");
       else b.setAttribute("style", prev);
+      document.title = prevTitle;
     };
   }, []);
 

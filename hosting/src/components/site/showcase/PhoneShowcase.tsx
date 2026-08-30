@@ -74,6 +74,13 @@ export function PhoneShowcase() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const durationRef = useRef(0);
   const idxRef = useRef(0);
+  // iOS Safari will not paint a frame from a currentTime seek on a video that
+  // has never played: the poster is dropped on seek and nothing is decoded
+  // behind it, so the phone screen goes blank. Playing and immediately pausing
+  // forces a decode. Allowed without a gesture because the video is muted +
+  // playsInline — except in Low Power Mode, which is what the touch fallback is
+  // for. Desktop decodes on seek regardless, so this is a no-op there.
+  const primedRef = useRef(false);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -88,6 +95,11 @@ export function PhoneShowcase() {
       idxRef.current = idx;
       setClipIndex(idx);
       setFailed(false);
+      // The next <video> mounts fresh, so the old clip's duration must not be
+      // used to seek it — clips run 5.9s to 23.3s, and mixing them up lands the
+      // playhead in the wrong place until onLoadedMetadata arrives. Zero here
+      // means "don't seek yet"; onMeta sets the real value and re-applies.
+      durationRef.current = 0;
     }
     const v = videoRef.current;
     if (v && durationRef.current > 0) {
@@ -115,10 +127,47 @@ export function PhoneShowcase() {
     return () => ro.disconnect();
   }, [narrow]);
 
+  const prime = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const played = v.play();
+    if (played && typeof played.then === "function") {
+      played
+        .then(() => {
+          v.pause();
+          primedRef.current = true;
+          applyScrub(scrollYProgress.get());
+        })
+        .catch(() => {
+          // Blocked (Low Power Mode / no gesture yet) — the touch handler retries.
+        });
+    } else {
+      v.pause();
+      primedRef.current = true;
+    }
+  };
+
+  // Retry priming on the visitor's first touch, which on a phone is the same
+  // gesture that starts the scroll, so the clip is decoded before it matters.
+  useEffect(() => {
+    const onFirstTouch = () => {
+      if (!primedRef.current) prime();
+    };
+    window.addEventListener("touchstart", onFirstTouch, { passive: true });
+    window.addEventListener("pointerdown", onFirstTouch, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onFirstTouch);
+      window.removeEventListener("pointerdown", onFirstTouch);
+    };
+  }, []);
+
   const onMeta = () => {
     const v = videoRef.current;
     if (!v) return;
     durationRef.current = v.duration || 0;
+    // Each clip mounts a fresh <video> (keyed by base), so every one needs priming.
+    primedRef.current = false;
+    prime();
     applyScrub(scrollYProgress.get());
   };
 

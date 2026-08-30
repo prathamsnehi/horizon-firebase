@@ -90,8 +90,10 @@
     "rewrites": [
       {
         "source": "/api/track",
-        "function": "trackEvent",
-        "region": "us-central1"
+        "function": {
+          "functionId": "trackEvent",
+          "region": "us-central1"
+        }
       },
       {
         "source": "**",
