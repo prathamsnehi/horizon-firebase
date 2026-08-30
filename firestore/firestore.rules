@@ -26,6 +26,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Marketing-site counters: one doc per day, aggregate only (no uid, no IP,
+    // no per-visitor row). Readable by admins for the dashboard; written by the
+    // trackEvent function through the Admin SDK, which bypasses these rules.
+    match /site_metrics/{day} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Everything else stays closed to clients: user_rate_limits, pregen_cache,
     // llm_rate_buckets and logs are server-only.
     match /{document=**} {

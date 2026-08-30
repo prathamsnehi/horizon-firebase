@@ -32,5 +32,6 @@ setGlobalOptions({ maxInstances: 10 });
 
 export * from "./controllers/quests"; // callables: generateCuratedQuests, generateUserDescribedQuest
 export * from "./controllers/tasks"; // onTaskDispatched: pregenerateCuratedBatch
+export * from "./controllers/siteMetrics"; // onRequest: trackEvent (marketing-site counters)
 
 // this is a brainrot special (ft. druski)

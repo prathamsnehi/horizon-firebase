@@ -257,3 +257,65 @@ export function TimeBars({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// DayBars — one measure per day. A single series, so there is no legend box:
+// the card title names it, and identity is never carried by color alone. Marks
+// are thin with 4px rounded data-ends anchored to the baseline, 2px apart; the
+// hit target spans the full column height so hover is easy on short bars.
+// ---------------------------------------------------------------------------
+
+export function DayBars({
+  days,
+  label,
+}: {
+  days: { date: string; value: number }[];
+  /** Singular noun for the tooltip, e.g. "visit". */
+  label: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = Math.max(1, ...days.map((d) => d.value));
+  const active = hover != null ? days[hover] : null;
+
+  return (
+    <div className="relative">
+      {/* Reserved height so the chart never reflows when the tooltip appears. */}
+      <div className="mb-1 h-4 text-micro text-dim nums">
+        {active && (
+          <span>
+            {active.date} — {active.value} {label}
+            {active.value === 1 ? "" : "s"}
+          </span>
+        )}
+      </div>
+
+      <div className="flex h-24 items-end gap-[2px]">
+        {days.map((day, i) => (
+          <div
+            key={day.date}
+            className="group relative flex h-full flex-1 cursor-default flex-col justify-end"
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <div className="absolute inset-0" aria-hidden />
+            {day.value > 0 ? (
+              <div
+                className="w-full rounded-t-mark bg-s1"
+                style={{ height: `${(day.value / max) * 100}%` }}
+              />
+            ) : (
+              // A quiet day still gets a baseline tick, so gaps read as zero
+              // rather than as missing data.
+              <div className="h-[2px] w-full rounded-mark bg-grid" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-1.5 flex justify-between text-micro text-muted nums">
+        <span>{days[0]?.date.slice(5) ?? ""}</span>
+        <span>today</span>
+      </div>
+    </div>
+  );
+}

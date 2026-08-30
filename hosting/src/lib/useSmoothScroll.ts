@@ -35,7 +35,11 @@ export function useSmoothScroll() {
       const el = document.querySelector(id);
       if (!el) return;
       e.preventDefault();
-      lenis.scrollTo(el as HTMLElement, { offset: -12, duration: 1.2 });
+      // Honour the target's CSS scroll-margin-top so native and Lenis scrolling
+      // land in the same place (Lenis doesn't read it itself). #steps sets 0, so a
+      // jump to the pinned showcase starts exactly at its top with no hero showing.
+      const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      lenis.scrollTo(el as HTMLElement, { offset: -margin, duration: 1.2 });
     };
     document.addEventListener("click", onClick);
 

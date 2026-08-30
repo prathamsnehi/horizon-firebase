@@ -6,7 +6,7 @@ import { DOWNLOAD_URL } from "@/lib/links";
 
 /**
  * A compact bar that slides in once the hero has scrolled away, keeping a
- * download/waitlist CTA always within reach (conversion). Hidden at the very top
+ * download CTA always within reach (conversion). Hidden at the very top
  * so the hero reads clean. Light + translucent so it works over both the light
  * sections and the dark scroll story.
  */
@@ -44,7 +44,7 @@ export function StickyHeader() {
           >
             <a href="#top" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
               <span style={{ width: 20, height: 10, background: color.peach, borderRadius: "20px 20px 0 0", display: "block" }} />
-              <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 16, letterSpacing: "-.01em", color: color.ink }}>Horizon</span>
+              <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 16, letterSpacing: "-.01em", textTransform: "lowercase", color: color.ink }}>Horizon</span>
             </a>
             <Magnetic strength={0.25}>
               <motion.a
@@ -59,6 +59,7 @@ export function StickyHeader() {
                   background: color.ink,
                   padding: "8px 16px",
                   borderRadius: 8,
+                  textTransform: "lowercase",
                   textDecoration: "none",
                 }}
               >

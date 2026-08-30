@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { MotionConfig } from "motion/react";
 import { StickyHeader } from "../components/site/StickyHeader";
 import { ScrollProgress } from "../components/site/ScrollProgress";
@@ -7,6 +7,7 @@ import Showcase from "../components/site/Showcase";
 import CtaFooter from "../components/site/CtaFooter";
 import { Grain } from "../components/ui/grain";
 import { useSmoothScroll } from "../lib/useSmoothScroll";
+import { trackPageview } from "../lib/analytics";
 import { color, font } from "../lib/tokens";
 
 /**
@@ -34,6 +35,12 @@ export default function Home() {
       if (prev === null) b.removeAttribute("style");
       else b.setAttribute("style", prev);
     };
+  }, []);
+
+  // Aggregate, anonymous counters only (see lib/analytics.ts). Runs once per
+  // mount; StrictMode double-invokes effects in dev, not in the production build.
+  useEffect(() => {
+    trackPageview();
   }, []);
 
   useSmoothScroll();

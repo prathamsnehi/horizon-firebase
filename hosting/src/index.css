@@ -164,6 +164,12 @@ html.lenis body {
 .hz-site [id="get"] {
   scroll-margin-top: 84px;
 }
+/* The pinned showcase must land flush at its own top: its content already keeps
+   clear of the nav internally, and any margin here leaves the hero in view and
+   starts the scroll-scrub part-way in. */
+.hz-site #steps {
+  scroll-margin-top: 0;
+}
 
 /* Animated underline for the header nav links. */
 .hz-nav-link {
@@ -185,42 +191,9 @@ html.lenis body {
   transform: scaleX(1);
 }
 
-/* Taped polaroid: rest rotation is a CSS var so hover can straighten it to 0. */
-.hz-polaroid {
-  transform: rotate(var(--rot, 0deg));
-  transition: transform 0.25s ease;
-}
-.hz-polaroid:hover {
-  transform: rotate(0deg);
-}
-
-/* Phone-screen micro-animations, referenced from inline `animation`. The
-   translate is baked into hzPulseC so it doesn't fight the walker's centring. */
-@keyframes hzBlink {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes hzPulseC {
-  0%,
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.9;
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.5);
-    opacity: 0.15;
-  }
-}
-
-/* Honour reduce-motion for the marketing site's CSS animations (the phone
-   cursor blink + walker pulse). Motion-library animations are handled by the
-   <MotionConfig reducedMotion="user"> wrapper in Home.tsx. */
+/* Honour reduce-motion for any CSS animation/transition on the marketing site.
+   Motion-library animations are handled by the <MotionConfig reducedMotion="user">
+   wrapper in Home.tsx. */
 @media (prefers-reduced-motion: reduce) {
   .hz-site *,
   .hz-site *::before,

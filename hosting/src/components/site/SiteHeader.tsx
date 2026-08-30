@@ -19,10 +19,10 @@ export default function SiteHeader() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
         <span style={{ width: 22, height: 11, background: color.peach, borderRadius: "22px 22px 0 0", display: "block" }} />
-        <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 18, letterSpacing: "-.01em", color: color.white }}>Horizon</span>
+        <span style={{ fontFamily: font.display, fontWeight: 800, fontSize: 18, letterSpacing: "-.01em", textTransform: "lowercase", color: color.white }}>Horizon</span>
       </div>
       <div style={{ display: "flex", gap: "clamp(14px,3vw,26px)", alignItems: "center", fontSize: 13.5, color: color.ink }}>
-        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.white, fontWeight: 700, textDecoration: "none" }}>
+        <a className="hz-nav-link hidden min-[560px]:inline" href="#steps" style={{ color: color.white, fontWeight: 700, textTransform: "lowercase", textDecoration: "none" }}>
           See it work
         </a>
         <motion.a
@@ -37,6 +37,7 @@ export default function SiteHeader() {
             background: color.peach,
             padding: "9px 17px",
             borderRadius: 8,
+            textTransform: "lowercase",
             textDecoration: "none",
             boxShadow: "0 10px 22px -14px rgba(160,85,42,.8)",
           }}

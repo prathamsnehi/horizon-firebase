@@ -368,3 +368,52 @@ export async function releaseRateLimitSlot(
     console.error("[releaseRateLimitSlot] failed:", err);
   }
 }
+
+// ------------------------------
+// Marketing-site metrics (site_metrics)
+// ------------------------------
+// One document per UTC day holding nothing but counters. There is no uid, no
+// IP, no per-visitor row and no way to reconstruct one person's session — a
+// visit is indistinguishable from any other visit, which is why this needs no
+// cookie and no consent banner. Referrer and device are coarse buckets kept as
+// count maps, never attached to an individual. Written only through the Admin
+// SDK; clients are denied by the catch-all rule in firestore.rules.
+// ------------------------------
+
+export type SiteEvent = "view" | "visit" | "download";
+
+export interface SiteEventContext {
+  /** Bare referrer hostname ("twitter.com") or "direct". Already sanitized. */
+  referrer?: string;
+  /** Coarse form factor bucket. */
+  device?: "mobile" | "desktop";
+}
+
+const EVENT_FIELD: Record<SiteEvent, string> = {
+  view: "pageviews",
+  visit: "visits",
+  download: "downloadClicks",
+};
+
+/** Bump today's counters for one site event. Best-effort: never throws. */
+export async function recordSiteEvent(
+  event: SiteEvent,
+  ctx: SiteEventContext = {},
+): Promise<void> {
+  const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+  const update: Record<string, unknown> = {
+    date: day,
+    [EVENT_FIELD[event]]: FieldValue.increment(1),
+  };
+  // Attribution is only meaningful on the first hit of a session, so the maps
+  // are bumped for "visit" alone — otherwise a visitor who loads three pages
+  // would count as three referrals.
+  if (event === "visit") {
+    if (ctx.referrer) {
+      update[`referrers.${ctx.referrer.replace(/\./g, "_")}`] =
+        FieldValue.increment(1);
+    }
+    if (ctx.device) update[`devices.${ctx.device}`] = FieldValue.increment(1);
+  }
+  await getDb().collection("site_metrics").doc(day).set(update, { merge: true });
+}

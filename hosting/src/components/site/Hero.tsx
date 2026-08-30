@@ -6,7 +6,7 @@ import SiteHeader from "./SiteHeader";
 import { HeroBackground } from "./HeroBackground";
 import { PolaroidCard } from "./PolaroidCard";
 import { TextEffect } from "@/components/ui/text-effect";
-import { DOWNLOAD_URL } from "@/lib/links";
+import { DownloadCTA } from "./DownloadCTA";
 
 /* Blur-clear drift-up (heroes 17/43): each element rises and unblurs on a spring. */
 const leftGroup: Variants = {
@@ -24,23 +24,6 @@ const rise: Variants = {
 };
 
 type CardProps = ComponentProps<typeof PolaroidCard>;
-
-/** The Apple wordmark logo, inline (icon sets like Heroicons/lucide omit brand
- *  logos, so the canonical path is inlined here). Inherits `currentColor`. */
-function AppleLogo({ size = 20 }: { size?: number }) {
-  return (
-    <svg
-      aria-hidden
-      width={size}
-      height={size}
-      viewBox="0 0 384 512"
-      fill="currentColor"
-      focusable="false"
-    >
-      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
-    </svg>
-  );
-}
 
 /**
  * A polaroid that assembles itself: the photo drops/fades in first, then the
@@ -199,7 +182,7 @@ function PolaroidStage({ scale }: { scale: number }) {
             tapeRotation: -3,
             chin: 40,
             wellLabel: "Photo - doing something for the first time",
-            caption: "Thought I'd embarass myself, tried it anyway",
+            caption: "Thought I'd embarrass myself, tried it anyway",
             photo: "/hero/hero-polaroid-2.webp",
           }}
         />
@@ -266,26 +249,17 @@ export default function Hero() {
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 8,
                 border: "1px solid rgba(255,255,255,.32)",
                 background: "rgba(255,255,255,.1)",
                 color: "rgba(255,255,255,.85)",
                 borderRadius: 999,
-                padding: "6px 13px 6px 11px",
+                padding: "6px 14px",
                 fontSize: 12.5,
                 fontWeight: 800,
                 letterSpacing: ".02em",
+                textTransform: "lowercase",
               }}
             >
-              <span
-                style={{
-                  width: 14,
-                  height: 7,
-                  background: color.peach,
-                  borderRadius: "14px 14px 0 0",
-                  display: "block",
-                }}
-              />
               Private beta · iOS
             </span>
           </motion.div>
@@ -305,12 +279,13 @@ export default function Hero() {
               lineHeight: 0.96,
               fontWeight: 800,
               letterSpacing: "-.038em",
+              textTransform: "lowercase",
               maxWidth: 560,
               color: color.white,
               textWrap: "pretty",
             }}
           >
-            Do the thing you keep going around.
+            The things you keep avoiding all have addresses.
           </TextEffect>
 
           {/* Paragraph */}
@@ -325,44 +300,13 @@ export default function Hero() {
               fontWeight: 500,
             }}
           >
-            Tell it what you avoid. It hands back one small quest — a real
-            place, close enough to walk to tonight.
+            Tell Horizon the things that make you hesitate. It gives you quests
+            to get you out of your comfort zone.
           </motion.p>
 
           {/* Download CTA */}
-          <motion.div variants={rise} id="get">
-            <motion.a
-              href={DOWNLOAD_URL}
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.98 }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 10,
-                background: color.peach,
-                color: color.white,
-                fontFamily: font.display,
-                fontWeight: 800,
-                fontSize: 16,
-                padding: "14px 24px",
-                borderRadius: 12,
-                textDecoration: "none",
-                boxShadow: "0 18px 34px -18px rgba(160,85,42,.8)",
-              }}
-            >
-              <AppleLogo size={19} />
-              Download for iOS
-            </motion.a>
-            <p
-              style={{
-                marginTop: 12,
-                fontSize: 13,
-                fontWeight: 500,
-                color: "rgba(255,255,255,.7)",
-              }}
-            >
-              Free · iOS first · no feed, ever.
-            </p>
+          <motion.div variants={rise}>
+            <DownloadCTA id="get" onDark />
           </motion.div>
 
           {/* Narrow screens: the polaroids drop in below the copy, still in-hero. */}

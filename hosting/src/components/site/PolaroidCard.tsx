@@ -85,7 +85,7 @@ export function PolaroidCard({
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
         ) : (
-          <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".14em", textTransform: "uppercase", color: color.inkFaint }}>
+          <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".14em", textTransform: "lowercase", color: color.inkFaint }}>
             {wellLabel}
           </span>
         )}

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Home from "./routes/Home";
+import Privacy from "./routes/Privacy";
 
 /**
  * The admin app — and with it Firebase, the dashboard and the log viewer — is
@@ -26,6 +27,7 @@ function AdminChunk() {
 
 export const router = createBrowserRouter([
   { path: "/", element: <Home /> },
+  { path: "/privacy", element: <Privacy /> },
   { path: "/admin/*", element: <AdminChunk /> },
   { path: "*", element: <Navigate to="/" replace /> },
 ]);

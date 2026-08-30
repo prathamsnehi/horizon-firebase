@@ -21,13 +21,6 @@ export const color = {
   peach: "#FFB693", // primary — CTA fill, eyebrow labels, pins, edges
   rust: "#A0552A", // peach's readable-on-light counterpart
   green: "#4A7A5C", // "COMPLETED" state only
-
-  // dark section
-  darkBg: "rgb(17,13,10)",
-  darkGround: "#070605",
-  darkPhone: "#0B0907",
-  darkOnLight: "#F7F1EA",
-  darkBody: "rgba(247,241,234,.66)",
 } as const;
 
 export const font = {
@@ -40,13 +33,4 @@ export const font = {
 export const layout = {
   pageMax: 1320,
   gutter: "clamp(20px, 5vw, 48px)",
-  heroGap: "clamp(40px, 8vw, 130px)",
-  breakpointNarrow: 960,
-  breakpointTiny: 560,
-} as const;
-
-export const motion = {
-  scrollPerStepVh: 105, // × 5 beats + 90vh = pinned section height
-  smoothing: 0.14,
-  hoverTransition: "transform .25s ease",
 } as const;

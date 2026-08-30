@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { fetchSamplesInWindow } from "../../lib/samples";
 import { computeStats, failingStage, type DashboardStats } from "../../lib/stats";
 import { ms, pct, relative } from "../../lib/format";
-import { HBarChart, Legend, Meter, StatTile, TimeBars } from "../../components/viz";
+import { DayBars, HBarChart, Legend, Meter, StatTile, TimeBars } from "../../components/viz";
+import { fetchSiteMetrics, type SiteTotals } from "../../lib/siteMetrics";
 import type { GenerationSample, TraceOutcome } from "../../types";
 
 const WINDOWS = [
@@ -63,6 +64,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
+      <SiteTraffic />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-base font-semibold">Pipeline health</h1>
         {/* Filters sit in one row above the charts. */}
@@ -342,5 +345,109 @@ function OutcomeBreakdown({ stats }: { stats: DashboardStats }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Marketing-site traffic (usehorizon.app). Reads the aggregate per-day counters
+ * written by the `trackEvent` function — there are no per-visitor records to
+ * show, by design, so everything here is a total or a rate.
+ *
+ * Loaded independently of the pipeline stats above: a failure here must not take
+ * the rest of the dashboard down with it, so the error is reported inline.
+ */
+function SiteTraffic() {
+  const [data, setData] = useState<SiteTotals | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSiteMetrics(30)
+      .then((d) => !cancelled && setData(d))
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const today = data?.days[data.days.length - 1];
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h1 className="text-base font-semibold">Site traffic</h1>
+        <span className="text-micro text-muted">Last 30 days · usehorizon.app</span>
+      </div>
+
+      {error && (
+        <div className="card p-4 text-tiny text-critical">
+          Couldn&apos;t load site metrics: {error}
+        </div>
+      )}
+
+      {!error && !data && (
+        <div className="card p-4 text-tiny text-muted">Loading…</div>
+      )}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile
+              label="Visits"
+              value={data.visits.toLocaleString()}
+              sub={`${today?.visits ?? 0} today`}
+            />
+            <StatTile
+              label="Page views"
+              value={data.pageviews.toLocaleString()}
+              sub={`${today?.pageviews ?? 0} today`}
+            />
+            <StatTile
+              label="Download clicks"
+              value={data.downloadClicks.toLocaleString()}
+              sub={`${today?.downloadClicks ?? 0} today`}
+            />
+            <StatTile
+              label="Click rate"
+              value={data.conversion == null ? "—" : pct(data.conversion)}
+              sub="clicks ÷ visits"
+            />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="card p-4">
+              <div className="mb-3 text-tiny font-medium">Visits per day</div>
+              <DayBars
+                days={data.days.map((d) => ({ date: d.date, value: d.visits }))}
+                label="visit"
+              />
+            </div>
+
+            <div className="card p-4">
+              <div className="mb-3 text-tiny font-medium">Where visits came from</div>
+              <HBarChart
+                categories={data.topReferrers.slice(0, 6).map((r) => r.host)}
+                series={[
+                  {
+                    label: "Visits",
+                    fill: "bg-s1",
+                    values: data.topReferrers.slice(0, 6).map((r) => r.count),
+                  },
+                ]}
+                format={(v) => v.toLocaleString()}
+                emptyNote="No referrers recorded yet"
+              />
+              <div className="mt-4 border-t border-line pt-3 text-micro text-muted nums">
+                {data.devices.mobile + data.devices.desktop > 0
+                  ? `${pct(data.devices.mobile / (data.devices.mobile + data.devices.desktop))} on mobile`
+                  : "No device data yet"}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

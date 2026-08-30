@@ -1,0 +1,7 @@
+# https://usehorizon.app
+User-agent: *
+Allow: /
+# The admin dashboard is app-internal and behind auth — keep it out of results.
+Disallow: /admin
+
+Sitemap: https://usehorizon.app/sitemap.xml
