@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { color, font, layout } from "../../lib/tokens";
 import { DOWNLOAD_URL } from "../../lib/links";
+import { trackDownloadClick } from "../../lib/analytics";
 
 /** Scrolls away normally (fixed nothing). Nav text links hide below 560px. */
 export default function SiteHeader() {
@@ -27,6 +28,7 @@ export default function SiteHeader() {
         </a>
         <motion.a
           href={DOWNLOAD_URL}
+          onClick={trackDownloadClick}
           whileHover={{ y: -1 }}
           whileTap={{ scale: 0.97 }}
           style={{

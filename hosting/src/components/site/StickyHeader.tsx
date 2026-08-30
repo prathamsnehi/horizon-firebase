@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/
 import { color, font, layout } from "@/lib/tokens";
 import { Magnetic } from "@/components/ui/magnetic";
 import { DOWNLOAD_URL } from "@/lib/links";
+import { trackDownloadClick } from "@/lib/analytics";
 
 /**
  * A compact bar that slides in once the hero has scrolled away, keeping a
@@ -49,6 +50,7 @@ export function StickyHeader() {
             <Magnetic strength={0.25}>
               <motion.a
                 href={DOWNLOAD_URL}
+                onClick={trackDownloadClick}
                 whileHover={{ y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 style={{

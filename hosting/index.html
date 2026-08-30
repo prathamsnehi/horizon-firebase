@@ -4,38 +4,38 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Horizon — quests for the things you avoid</title>
-    <meta
-      name="description"
-      content="Tell Horizon what makes you hesitate. It hands back a few quests at real places near you, picked for what you like. iOS, free."
-    />
-    <meta name="theme-color" content="#FBF8F3" />
-    <link rel="canonical" href="https://usehorizon.app/" />
 
-    <!-- Favicon / app icons. favicon.svg (the sunrise mark), the 180² touch icon and
-         the 1200×630 og.png all ship in /public; the latter two are generated from
-         public/appicon.png (see the launch notes). -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
-    <!-- Open Graph / Twitter — the link-share preview. Absolute URLs point at the
-         custom domain (usehorizon.app); update them together if that ever moves. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@snehipratham" />
+    <meta name="twitter:creator" content="@snehipratham" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Horizon" />
     <meta property="og:url" content="https://usehorizon.app/" />
     <meta property="og:title" content="Horizon — quests for the things you avoid" />
-    <meta
-      property="og:description"
-      content="Tell Horizon what makes you hesitate. It hands back a few quests at real places near you, picked for what you like. iOS, free."
-    />
+    <meta property="og:description" content="Tell Horizon what makes you hesitate. It hands back a few quests at real places near you, picked for what you like. iOS, free." />
     <meta property="og:image" content="https://usehorizon.app/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Horizon — quests for the things you avoid" />
-    <meta
-      name="twitter:description"
-      content="Tell Horizon what makes you hesitate. It hands back a few quests at real places near you, picked for what you like."
-    />
-    <meta name="twitter:image" content="https://usehorizon.app/og.png" />
+    <meta property="og:image:alt" content="The Horizon app icon and tagline" />
+
+    <!-- Why the block above sits at the very top of <head>:
+         Firebase Hosting honours Range requests on HTML, so a crawler fetches only
+         a prefix of this document (Facebook's debugger reports a 206). These tags
+         previously sat past ~1.1KB, so a crawler reading a short prefix saw the
+         <title> and no card tags — which is why X rendered a bare link. Nothing
+         long (comments, meta, JSON-LD) may move above them, and a formatter must
+         not wrap them onto multiple lines. X falls back to og:title/description/
+         image, so the twitter:* duplicates are omitted to keep the block small. -->
+
+    <meta name="description" content="Tell Horizon what makes you hesitate. It hands back a few quests at real places near you, picked for what you like. iOS, free." />
+    <meta name="theme-color" content="#FBF8F3" />
+    <link rel="canonical" href="https://usehorizon.app/" />
+
+    <!-- favicon.svg (the sunrise mark), the 180² touch icon and the 1200×630
+         og.png all ship in /public; the latter two are generated from
+         public/appicon.png (see the launch notes). -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Structured data for search/link previews. Deliberately no ratings/reviews
          (the app is pre-launch) — only facts. -->
