@@ -32,7 +32,7 @@ layers. Controllers only do Firebase things; services take plain arguments and r
 objects, which is what makes them unit-testable; integrations wrap third-party SDKs so a
 vendor swap touches one file.
 
-```javascript
+```mermaid
 flowchart TD
     A[iOS client] -->|callable| B[generateCuratedQuests]
     B --> C{Auth and payload valid}
@@ -132,7 +132,7 @@ The marketing site at [usehorizon.app](https://usehorizon.app) is React 19 + Vit
 
 ## Repo layout
 
-```javascript
+```text
 functions/          Cloud Functions (gen 2, Node 22)
   controllers/      Firebase entrypoints — validation and error mapping only
   services/         business logic, framework-free and unit-testable
