@@ -62,6 +62,11 @@ export function PhoneShowcase() {
   }));
   const [clipIndex, setClipIndex] = useState(0);
   const [failed, setFailed] = useState(false);
+  // Scrubbing only paints if the bytes for that timestamp are already buffered.
+  // On a cold load the scroll outruns the download, so until a clip is buffered
+  // we keep its poster over the top and skip seeking entirely — a still frame
+  // reads as intentional, a blank phone screen reads as broken.
+  const [ready, setReady] = useState(false);
 
   const narrow = vp.w < 860;
   const gutter = Math.min(48, Math.max(20, vp.w * 0.05));
@@ -81,6 +86,7 @@ export function PhoneShowcase() {
   // playsInline — except in Low Power Mode, which is what the touch fallback is
   // for. Desktop decodes on seek regardless, so this is a no-op there.
   const primedRef = useRef(false);
+  const readyRef = useRef(false);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -100,9 +106,14 @@ export function PhoneShowcase() {
       // playhead in the wrong place until onLoadedMetadata arrives. Zero here
       // means "don't seek yet"; onMeta sets the real value and re-applies.
       durationRef.current = 0;
+      // Nothing of the new clip is buffered yet: hold its poster and don't seek
+      // until it is. Without resetting these, clips 2-4 would inherit clip 1's
+      // "ready" and go blank on a cold load.
+      readyRef.current = false;
+      setReady(false);
     }
     const v = videoRef.current;
-    if (v && durationRef.current > 0) {
+    if (v && readyRef.current && durationRef.current > 0) {
       const t = Math.min(
         durationRef.current - 0.05,
         local * durationRef.current,
@@ -161,6 +172,23 @@ export function PhoneShowcase() {
     };
   }, []);
 
+  /** Enough of the clip is buffered to scrub it without thrashing on range requests. */
+  const markReady = () => {
+    if (readyRef.current) return;
+    readyRef.current = true;
+    setReady(true);
+    applyScrub(scrollYProgress.get());
+  };
+
+  // canplaythrough is the primary signal; buffered coverage is the fallback for
+  // browsers that never fire it (notably iOS Safari with preload restricted).
+  const onProgress = () => {
+    const v = videoRef.current;
+    if (!v || !v.duration) return;
+    const end = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    if (end / v.duration > 0.9) markReady();
+  };
+
   const onMeta = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -184,6 +212,7 @@ export function PhoneShowcase() {
   );
 
   const s = SCREENS[clipIndex];
+  const next = SCREENS[clipIndex + 1];
   const phoneLeft = clipIndex % 2 === 0;
   const swap = reduce
     ? { duration: 0 }
@@ -317,12 +346,50 @@ export function PhoneShowcase() {
               preload="auto"
               controls={false}
               onLoadedMetadata={onMeta}
+              onCanPlayThrough={markReady}
+              onProgress={onProgress}
               onError={() => setFailed(true)}
               style={{
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
                 display: "block",
+              }}
+            />
+          )}
+          {/* Poster held over the clip until it can be scrubbed. */}
+          {!failed && !reduce && !ready && (
+            <img
+              key={`${s.base}-hold`}
+              src={`${s.base}.jpg`}
+              alt=""
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          )}
+          {/* Warm the next clip while this one is on screen, so arriving at the
+              step doesn't start a cold download. Off-screen and never played. */}
+          {!reduce && next && (
+            <video
+              key={`${next.base}-prefetch`}
+              src={`${next.base}.mp4`}
+              muted
+              playsInline
+              preload="auto"
+              aria-hidden
+              tabIndex={-1}
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                opacity: 0,
+                pointerEvents: "none",
               }}
             />
           )}
